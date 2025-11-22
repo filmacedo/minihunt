@@ -7,6 +7,20 @@ export const env = createEnv({
     JWT_SECRET: z.string().min(1).optional().default("build-time-placeholder"),
     // NEYNAR_API_KEY is optional - can be undefined, empty string, or a valid API key
     NEYNAR_API_KEY: z.string().optional(),
+    SUPABASE_URL: z
+      .string()
+      .url()
+      .optional()
+      .default("https://mvrirfxzkmtgddmkatnc.supabase.co"),
+    SUPABASE_KEY: z.string().min(1, "SUPABASE_KEY is required"),
+    MINI_APP_WEEKLY_BETS_ADDRESS: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/, "MINI_APP_WEEKLY_BETS_ADDRESS must be a valid address"),
+    CELO_RPC_URL: z
+      .string()
+      .url()
+      .optional()
+      .default("https://forno.celo.org"),
   },
   client: {
     NEXT_PUBLIC_URL: z.string().min(1).optional().default("http://localhost:3000"),
