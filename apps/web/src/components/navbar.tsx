@@ -117,6 +117,3 @@ export function TopNav({ onOpenModal }: TopNavProps) {
     </>
   );
 }
-
-// Backward compatibility for layout if needed temporarily, though we plan to remove it from layout
-export const Navbar = () => <TopNav />;

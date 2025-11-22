@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther } from "viem";
 import { useApi } from "@/hooks/use-api";
@@ -22,7 +21,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [iconUrl, setIconUrl] = useState("");
-  const [isValid, setIsValid] = useState(true); // Assume valid for now or add regex check
+  const isValid = url.length > 0; // Simple validation
   
   const { context } = useMiniApp();
   const { post } = useApi();

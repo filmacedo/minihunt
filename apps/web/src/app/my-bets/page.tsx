@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMiniApp } from "@/contexts/miniapp-context";
 import { TopNav } from "@/components/navbar";
-import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { useUserVotes } from "@/hooks/use-user-votes";
@@ -12,7 +11,6 @@ import { formatEther } from "viem";
 // Reuse these modals
 import { SubmitAppModal } from "@/components/modals/submit-app-modal";
 import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
-import { ClaimModal } from "@/components/modals/claim-modal";
 
 export default function MyBetsPage() {
   const { context } = useMiniApp();

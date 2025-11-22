@@ -2,73 +2,57 @@
 
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
-import { PAST_WEEKS } from "@/lib/data";
+import { formatEther } from "viem";
 
 interface ClaimModalProps {
   weekId: string;
+  earned: string; // Total earned amount in wei
   onClose: () => void;
 }
 
-export function ClaimModal({ weekId, onClose }: ClaimModalProps) {
-  const week = PAST_WEEKS.find((w) => w.id === weekId);
-
-  if (!week) return null;
+export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
+  const earnedAmount = BigInt(earned);
+  const earnedFormatted = formatEther(earnedAmount);
 
   const handleClaim = () => {
-    // Mock claim action
-    alert("Rewards claimed successfully! (Mock)");
+    // TODO: Implement claim transaction
+    // This will trigger a wallet transaction to claim rewards
+    alert("Claim feature coming soon!");
     onClose();
   };
 
   return (
     <ModalWrapper
       onClose={onClose}
-      title={`Claim Week ${week.label.split("Week ")[1].split(" ")[0]} Rewards`}
+      title={`Claim Week Rewards`}
     >
       <div className="flex flex-col items-center text-center mb-6">
         <div className="w-20 h-20 bg-yellow-400/20 rounded-full mb-4 flex items-center justify-center text-4xl">
           🏆
         </div>
         <h2 className="text-3xl font-bold text-foreground mb-1 font-mono">
-          ${week.winnings?.toFixed(2)}
+          {earnedFormatted} CELO
         </h2>
         <p className="text-sm text-muted-foreground">Total Winnings</p>
       </div>
 
-      <div className="bg-muted/30 rounded-xl border border-border p-4 mb-6 space-y-3">
-        {week.items.map((item, idx) => (
-          <div key={idx} className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground">
-                {item.appName}
-              </span>
-              <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                #{item.rank}
-              </span>
-            </div>
-            <div className="font-mono text-foreground font-medium">
-              ${item.winnings?.toFixed(2)}
-            </div>
-          </div>
-        ))}
-        <div className="border-t border-border/50 pt-3 flex justify-between items-center text-sm">
-          <span className="text-muted-foreground">Claim deadline</span>
-          <span className="text-foreground font-mono">
-            {week.claimDeadline}
-          </span>
+      <div className="bg-muted/30 rounded-xl border border-border p-4 mb-6">
+        <div className="text-center text-sm text-muted-foreground">
+          Week ID: {weekId}
         </div>
       </div>
 
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center mb-6 text-xs text-blue-200">
-        Note: This is a demo. In the real app, this would trigger a wallet
-        transaction.
+        Note: Claim feature will be implemented soon. This will trigger a wallet
+        transaction to claim your rewards.
       </div>
 
       <Button
-        className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono"
+        className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleClaim}
+        disabled={true}
       >
-        Claim ${week.winnings?.toFixed(2)}
+        Claim {earnedFormatted} CELO
       </Button>
     </ModalWrapper>
   );

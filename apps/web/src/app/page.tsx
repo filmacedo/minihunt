@@ -9,14 +9,12 @@ import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useVotersLeaderboard } from "@/hooks/use-voters-leaderboard";
 import { MiniApp } from "@/lib/types";
-import { useMiniApp } from "@/contexts/miniapp-context";
 import { formatEther } from "viem";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
-  const { context } = useMiniApp();
   const { leaderboard: apps, week: appsWeek, isLoading: appsLoading, refetch: refetchApps } = useLeaderboard();
   const { leaderboard: voters, isLoading: votersLoading } = useVotersLeaderboard();
   
