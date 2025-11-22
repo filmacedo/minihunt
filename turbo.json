@@ -27,9 +27,6 @@
     "deploy": {
       "dependsOn": ["compile"]
     },
-    "deploy:alfajores": {
-      "dependsOn": ["compile"]
-    },
     "deploy:sepolia": {
       "dependsOn": ["compile"]
     },

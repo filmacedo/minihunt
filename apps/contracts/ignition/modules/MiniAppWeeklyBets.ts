@@ -5,14 +5,15 @@ import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
 // cUSD addresses on different networks
 // Celo Mainnet: 0x765DE816845861e75A25fCA122bb6898B8B1282a
-// Alfajores: 0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1
-// Sepolia: Check Celo Sepolia testnet for cUSD address
+// Sepolia: Set via environment variable SEPOLIA_CUSD_ADDRESS or deployment parameters
 
 const MiniAppWeeklyBetsModule = buildModule("MiniAppWeeklyBetsModule", (m: any) => {
   // Get parameters with defaults
+  // Note: cUSD address should be provided via deployment parameters for each network
+  // The deployment script will always pass this parameter, so the default is just a placeholder
   const cUSD = m.getParameter(
     "cUSD",
-    "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1" // Default to Alfajores testnet
+    "0x0000000000000000000000000000000000000000" // Placeholder - must be set via deployment parameters
   );
   
   const protocolRecipient = m.getParameter(
