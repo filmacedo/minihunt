@@ -98,3 +98,31 @@ export async function getWeekLeaderboard(weekId: string): Promise<WeekLeaderboar
   });
 }
 
+export interface VoterEarningsEntry {
+  fid: string;
+  paidAmount: bigint;
+  earningAmount: bigint;
+}
+
+export async function getVoterEarningsLeaderboard(weekId: string): Promise<VoterEarningsEntry[]> {
+  const { data, error } = await client
+    .from("fid_week_earnings")
+    .select("fid, paid_amount, earning_amount")
+    .eq("week_id", weekId)
+    .order("earning_amount", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load voter earnings leaderboard for week ${weekId}: ${error.message}`);
+  }
+
+  if (!data) {
+    return [];
+  }
+
+  return data.map((row) => ({
+    fid: row.fid.toString(),
+    paidAmount: toWeiBigInt(row.paid_amount),
+    earningAmount: toWeiBigInt(row.earning_amount),
+  }));
+}
+
