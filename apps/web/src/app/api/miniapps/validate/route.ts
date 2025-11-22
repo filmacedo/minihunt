@@ -1,5 +1,86 @@
 import { NextResponse } from "next/server";
-import { validateMiniApp } from "@/lib/miniapp-utils";
+import { keccak256, stringToHex } from "viem";
+
+import { normalizeUrl, validateMiniApp } from "@/lib/miniapp-utils";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+
+const supabaseClient = getSupabaseServerClient();
+
+async function hasParticipatedInPastVoting(normalizedUrl: string): Promise<boolean> {
+  const frameSignature = keccak256(stringToHex(normalizedUrl));
+
+  // Try by frame_signature first (preferred for normalized URLs)
+  const {
+    data: miniAppBySignature,
+    error: miniAppSignatureError,
+  } = await supabaseClient
+    .from("mini_apps")
+    .select("id")
+    .eq("frame_signature", frameSignature)
+    .maybeSingle();
+
+  if (miniAppSignatureError) {
+    throw new Error(`Failed to load mini app by signature: ${miniAppSignatureError.message}`);
+  }
+
+  let miniAppId = miniAppBySignature?.id ?? null;
+
+  // Fallback: match by stored frame_url (some legacy rows may only match by URL)
+  if (!miniAppId) {
+    const {
+      data: miniAppByUrl,
+      error: miniAppUrlError,
+    } = await supabaseClient
+      .from("mini_apps")
+      .select("id")
+      .eq("frame_url", normalizedUrl)
+      .maybeSingle();
+
+    if (miniAppUrlError) {
+      throw new Error(`Failed to load mini app by URL: ${miniAppUrlError.message}`);
+    }
+
+    miniAppId = miniAppByUrl?.id ?? null;
+  }
+
+  // Additional fallback: handle stored URLs that might include a trailing slash
+  if (!miniAppId && !normalizedUrl.endsWith("/")) {
+    const {
+      data: miniAppWithTrailingSlash,
+      error: miniAppTrailingSlashError,
+    } = await supabaseClient
+      .from("mini_apps")
+      .select("id")
+      .eq("frame_url", `${normalizedUrl}/`)
+      .maybeSingle();
+
+    if (miniAppTrailingSlashError) {
+      throw new Error(`Failed to load mini app by trailing slash: ${miniAppTrailingSlashError.message}`);
+    }
+
+    miniAppId = miniAppWithTrailingSlash?.id ?? null;
+  }
+
+  if (!miniAppId) {
+    return false;
+  }
+
+  const {
+    data: existingVote,
+    error: voteLookupError,
+  } = await supabaseClient
+    .from("week_votes")
+    .select("id")
+    .eq("mini_app_id", miniAppId)
+    .limit(1)
+    .maybeSingle();
+
+  if (voteLookupError) {
+    throw new Error(`Failed to check mini app votes: ${voteLookupError.message}`);
+  }
+
+  return Boolean(existingVote);
+}
 
 /**
  * Validate if a URL is a valid mini app by checking for farcaster.json
@@ -19,8 +100,18 @@ export async function POST(request: Request) {
       );
     }
 
+    let normalizedUrl: string | null = null;
+    try {
+      normalizedUrl = normalizeUrl(url);
+    } catch {
+      // Ignore normalization failures here; validateMiniApp will return the detailed error
+    }
+
     // Validate the URL and fetch manifest
     const result = await validateMiniApp(url);
+
+    const hasParticipatedBefore =
+      normalizedUrl !== null ? await hasParticipatedInPastVoting(normalizedUrl) : false;
 
     if (!result.isValid) {
       return NextResponse.json(
@@ -28,6 +119,7 @@ export async function POST(request: Request) {
           isValid: false,
           error: result.error,
           manifest: result.manifest,
+          hasParticipatedBefore,
         },
         { status: 200 } // Still return 200 with isValid: false for easier client handling
       );
@@ -37,6 +129,7 @@ export async function POST(request: Request) {
       isValid: true,
       manifest: result.manifest,
       url: url,
+      hasParticipatedBefore,
     });
   } catch (error) {
     console.error("Validation error:", error);

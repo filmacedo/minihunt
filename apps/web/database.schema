@@ -4,12 +4,13 @@
 CREATE TABLE public.fid_week_earnings (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  fid numeric NOT NULL,
+  fid bigint NOT NULL,
   week_id bigint,
   paid_amount numeric DEFAULT '0'::numeric,
   earning_amount numeric DEFAULT '0'::numeric,
   CONSTRAINT fid_week_earnings_pkey PRIMARY KEY (id),
-  CONSTRAINT fid_week_earnings_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id)
+  CONSTRAINT fid_week_earnings_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id),
+  CONSTRAINT fid_week_earnings_fid_fkey FOREIGN KEY (fid) REFERENCES public.users(id)
 );
 CREATE TABLE public.mini_apps (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -20,13 +21,23 @@ CREATE TABLE public.mini_apps (
   description text,
   icon_url character varying,
   image_url character varying,
-  CONSTRAINT mini_apps_pkey PRIMARY KEY (id)
+  creator_fid bigint,
+  CONSTRAINT mini_apps_pkey PRIMARY KEY (id),
+  CONSTRAINT mini_apps_creator_fid_fkey FOREIGN KEY (creator_fid) REFERENCES public.users(id)
+);
+CREATE TABLE public.users (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  name character varying,
+  bio text,
+  profile_image_url text,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.week_votes (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   mini_app_id bigint NOT NULL,
-  fid numeric NOT NULL,
+  fid bigint NOT NULL,
   week_id bigint NOT NULL,
   transaction_hash character varying NOT NULL,
   paid_amount numeric,

@@ -6,6 +6,12 @@ export interface VoterEntry {
   fid: string;
   paidAmount: string;
   earningAmount: string;
+  user: {
+    id: string;
+    name: string | null;
+    bio: string | null;
+    profile_image_url: string | null;
+  } | null;
 }
 
 interface VotersLeaderboardResponse {

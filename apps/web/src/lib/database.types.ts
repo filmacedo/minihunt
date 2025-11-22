@@ -122,6 +122,30 @@ export interface Database {
           }
         ];
       };
+      users: {
+        Row: {
+          id: string;
+          created_at: string;
+          name: string | null;
+          bio: string | null;
+          profile_image_url: string | null;
+        };
+        Insert: {
+          id?: string | number;
+          created_at?: string;
+          name?: string | null;
+          bio?: string | null;
+          profile_image_url?: string | null;
+        };
+        Update: {
+          id?: string | number;
+          created_at?: string;
+          name?: string | null;
+          bio?: string | null;
+          profile_image_url?: string | null;
+        };
+        Relationships: [];
+      };
       weeks: {
         Row: {
           created_at: string;

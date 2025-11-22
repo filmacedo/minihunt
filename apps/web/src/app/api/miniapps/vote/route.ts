@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { createMiniApp } from "@/lib/repositories/miniapps";
 import { findOrCreateWeekByTimestamp } from "@/lib/repositories/weeks";
+import { ensureUserExists } from "@/lib/repositories/users";
 import { fetchFarcasterManifest } from "@/lib/miniapp-utils";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
@@ -126,6 +127,9 @@ export async function POST(request: Request) {
     };
 
     const { appHash, voter, pricePaid, week } = eventArgs;
+
+    // Ensure user exists in the database (fetch from Neynar if needed)
+    await ensureUserExists(fid);
 
     // Get the transaction to decode the input and extract fullUrl
     const tx = await publicClient.getTransaction({ hash: txHash });

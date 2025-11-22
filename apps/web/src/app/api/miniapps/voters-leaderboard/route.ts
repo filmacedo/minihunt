@@ -41,6 +41,7 @@ export async function GET(request: Request) {
         fid: entry.fid,
         paidAmount: entry.paidAmount.toString(),
         earningAmount: entry.earningAmount.toString(),
+        user: entry.user,
       })),
     });
   } catch (error) {
