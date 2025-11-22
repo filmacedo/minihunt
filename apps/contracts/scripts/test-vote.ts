@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 /**
  * Test script to vote on a mini app in the contract and submit to the API
- * 
+ *
  * Usage:
  *   npm run test-vote
  *   PRIVATE_KEY=0x... npm run test-vote
  *   API_URL=http://localhost:3000 npm run test-vote
  */
 
-import { createPublicClient, createWalletClient, http, keccak256, stringToHex, parseEther, type Address, type Hash } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  keccak256,
+  stringToHex,
+  parseEther,
+  type Address,
+  type Hash,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
@@ -21,14 +30,21 @@ const __dirname = dirname(__filename);
 
 // Load ABI from web app (relative to contracts/scripts directory)
 // From apps/contracts/scripts/ -> go up to apps/ -> then into web/
-const abiPath = join(__dirname, "../../web/src/lib/abis/mini-app-weekly-bets.json");
-const MINI_APP_WEEKLY_BETS_ABI = JSON.parse(readFileSync(abiPath, "utf-8")) as Abi;
+const abiPath = join(
+  __dirname,
+  "../../web/src/lib/abis/mini-app-weekly-bets.json"
+);
+const MINI_APP_WEEKLY_BETS_ABI = JSON.parse(
+  readFileSync(abiPath, "utf-8")
+) as Abi;
 
 // Configuration
-const CELO_SEPOLIA_RPC = process.env.CELO_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
-const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS || "0x2b50Ae04F0B37e7a7Eb95aB5A2C75da8aADfe198") as Address;
-const USDC_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address; // USDC on Celo Sepolia
-const MINI_APP_URL = "https://base.builderscore.xyz/";
+const CELO_SEPOLIA_RPC =
+  process.env.CELO_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
+const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS ||
+  "0x272ab20E6AF4FbF2b87B93d842288f8Bd5756f2c") as Address;
+const CUSD_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address;
+const MINI_APP_URL = "https://celo.builderscore.xyz/";
 const FID = 253890;
 const API_URL = process.env.API_URL || "http://localhost:3000";
 
@@ -137,7 +153,11 @@ async function main() {
     throw new Error("PRIVATE_KEY environment variable is required");
   }
 
-  const account = privateKeyToAccount(privateKey.startsWith("0x") ? privateKey as `0x${string}` : `0x${privateKey}`);
+  const account = privateKeyToAccount(
+    privateKey.startsWith("0x")
+      ? (privateKey as `0x${string}`)
+      : `0x${privateKey}`
+  );
 
   console.log("🔐 Using account:", account.address);
   console.log("📝 Mini App URL:", MINI_APP_URL);
@@ -165,11 +185,11 @@ async function main() {
   console.log("");
 
   // Get token decimals
-  const decimals = await publicClient.readContract({
+  const decimals = (await publicClient.readContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "decimals",
-  }) as number;
+  })) as number;
 
   console.log("🔢 USDC Decimals:", decimals);
   console.log("");
@@ -183,32 +203,46 @@ async function main() {
   });
 
   const decimalsDivisor = BigInt(10 ** decimals);
-  const balanceFormatted = (Number(balance) / Number(decimalsDivisor)).toFixed(6);
-  
+  const balanceFormatted = (Number(balance) / Number(decimalsDivisor)).toFixed(
+    6
+  );
+
   console.log("💰 USDC Balance:", balance.toString(), "units");
   console.log("   (", balanceFormatted, "USDC)");
   console.log("");
 
   // Check current price (get initial price from contract)
   // Note: Contract's initialPrice is updatable and has no decimals assumption
-  const initialPrice = await publicClient.readContract({
+  const initialPrice = (await publicClient.readContract({
     address: CONTRACT_ADDRESS,
     abi: WEEKLY_BETS_ABI,
     functionName: "initialPrice",
-  }) as bigint;
+  })) as bigint;
 
   // Note: Contract's initialPrice is updatable and has no decimals assumption
   // The owner can set it to match the token's decimals
-  console.log("ℹ️  Token has", decimals, "decimals. Contract's initialPrice is", initialPrice.toString(), "token units.");
-  console.log("   (Owner can update initialPrice via setInitialPrice() to match token decimals)");
+  console.log(
+    "ℹ️  Token has",
+    decimals,
+    "decimals. Contract's initialPrice is",
+    initialPrice.toString(),
+    "token units."
+  );
+  console.log(
+    "   (Owner can update initialPrice via setInitialPrice() to match token decimals)"
+  );
   console.log("");
 
   // The contract will transfer INITIAL_PRICE (1e18) units
   // If token has 6 decimals: 1e18 units = 1e12 cUSD (1 trillion cUSD!)
   // If token has 18 decimals: 1e18 units = 1 cUSD
   const priceInUSDC = Number(initialPrice) / Number(decimalsDivisor);
-  
-  console.log("💸 Initial Price (contract will transfer):", initialPrice.toString(), "token units");
+
+  console.log(
+    "💸 Initial Price (contract will transfer):",
+    initialPrice.toString(),
+    "token units"
+  );
   console.log("💸 Initial Price (in USDC):", priceInUSDC.toFixed(6), "USDC");
   console.log("");
 
@@ -216,19 +250,21 @@ async function main() {
   // The contract will transfer `initialPrice` amount in token units
   if (balance < initialPrice) {
     const needed = initialPrice - balance;
-    const neededFormatted = (Number(needed) / Number(decimalsDivisor)).toFixed(6);
+    const neededFormatted = (Number(needed) / Number(decimalsDivisor)).toFixed(
+      6
+    );
     const requiredFormatted = priceInUSDC.toFixed(6);
-    
+
     throw new Error(
       `❌ Insufficient USDC balance!\n` +
-      `   Current balance: ${balanceFormatted} USDC\n` +
-      `   Required: ${requiredFormatted} USDC (contract will transfer ${initialPrice.toString()} token units)\n` +
-      `   Need to add: ${neededFormatted} USDC\n` +
-      `   Token decimals: ${decimals}\n` +
-      `   Please fund your account (${account.address}) with sufficient USDC to vote.`
+        `   Current balance: ${balanceFormatted} USDC\n` +
+        `   Required: ${requiredFormatted} USDC (contract will transfer ${initialPrice.toString()} token units)\n` +
+        `   Need to add: ${neededFormatted} USDC\n` +
+        `   Token decimals: ${decimals}\n` +
+        `   Please fund your account (${account.address}) with sufficient USDC to vote.`
     );
   }
-  
+
   console.log("✅ Balance is sufficient for voting!");
   console.log("");
 
@@ -256,7 +292,11 @@ async function main() {
     console.log("✅ Approval confirmed:", approveHash);
     console.log("");
   } else {
-    console.log("✅ Already approved (allowance:", allowance.toString(), "wei)");
+    console.log(
+      "✅ Already approved (allowance:",
+      allowance.toString(),
+      "wei)"
+    );
     console.log("");
   }
 
@@ -270,7 +310,9 @@ async function main() {
   });
 
   console.log("⏳ Waiting for vote transaction...");
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: voteHash });
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: voteHash,
+  });
   console.log("✅ Vote transaction confirmed:", voteHash);
   console.log("📊 Transaction receipt:", {
     blockNumber: receipt.blockNumber.toString(),
@@ -283,11 +325,12 @@ async function main() {
   await submitVoteToAPI(voteHash, FID);
 
   console.log("");
-  console.log("🎉 All done! Vote has been submitted to both the contract and the API.");
+  console.log(
+    "🎉 All done! Vote has been submitted to both the contract and the API."
+  );
 }
 
 main().catch((error) => {
   console.error("❌ Error:", error);
   process.exit(1);
 });
-

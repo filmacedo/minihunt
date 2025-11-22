@@ -1272,5 +1272,185 @@ describe("MiniAppWeeklyBets", function () {
       expect(payout1Finalized).to.equal(payout1); // Should match pre-finalization
     });
   });
+
+  describe("Price Query Functions", function () {
+    it("Should return initialPrice for app that hasn't been voted on yet", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+
+      // Price should be initialPrice for new app
+      const price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(price).to.equal(INITIAL_PRICE);
+
+      // Also test convenience function
+      const priceCurrentWeek = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
+      expect(priceCurrentWeek).to.equal(INITIAL_PRICE);
+    });
+
+    it("Should return correct price after first vote", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+      const url = "https://app1.com";
+
+      // First vote
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+      });
+
+      // Price should increase by 3% (103/100)
+      const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
+      const price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(price).to.equal(expectedPrice);
+
+      // Also test convenience function
+      const priceCurrentWeek = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
+      expect(priceCurrentWeek).to.equal(expectedPrice);
+    });
+
+    it("Should return correct price after multiple votes", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+      const url = "https://app1.com";
+
+      // First vote - price becomes INITIAL_PRICE * 103/100
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+      });
+      let expectedPrice = (INITIAL_PRICE * 103n) / 100n;
+      let price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(price).to.equal(expectedPrice);
+
+      // Second vote - price becomes (INITIAL_PRICE * 103/100) * 103/100
+      await contract.write.vote([appHash, url], {
+        account: user2.account,
+      });
+      expectedPrice = (expectedPrice * 103n) / 100n;
+      price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(price).to.equal(expectedPrice);
+
+      // Third vote
+      await contract.write.vote([appHash, url], {
+        account: user3.account,
+      });
+      expectedPrice = (expectedPrice * 103n) / 100n;
+      price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(price).to.equal(expectedPrice);
+    });
+
+    it("Should return initialPrice for new week (price resets)", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+      const url = "https://app1.com";
+
+      // Vote in current week
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+      });
+
+      // Price should be increased
+      const priceAfterVote = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfterVote).to.equal((INITIAL_PRICE * 103n) / 100n);
+
+      // Advance to next week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      const nextWeek = await contract.read.getCurrentWeek();
+
+      // Price should reset to initialPrice for new week
+      const priceNewWeek = await contract.read.getPriceForNextVote([nextWeek, appHash]);
+      expect(priceNewWeek).to.equal(INITIAL_PRICE);
+    });
+
+    it("Should return different prices for different apps in same week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const app1Hash = getAppHash("https://app1.com");
+      const app2Hash = getAppHash("https://app2.com");
+      const url1 = "https://app1.com";
+      const url2 = "https://app2.com";
+
+      // Vote for app1 once
+      await contract.write.vote([app1Hash, url1], {
+        account: user1.account,
+      });
+
+      // Vote for app2 twice
+      await contract.write.vote([app2Hash, url2], {
+        account: user2.account,
+      });
+      await contract.write.vote([app2Hash, url2], {
+        account: user3.account,
+      });
+
+      // App1 price should be INITIAL_PRICE * 103/100
+      const price1 = await contract.read.getPriceForNextVote([currentWeek, app1Hash]);
+      expect(price1).to.equal((INITIAL_PRICE * 103n) / 100n);
+
+      // App2 price should be (INITIAL_PRICE * 103/100) * 103/100
+      const price2 = await contract.read.getPriceForNextVote([currentWeek, app2Hash]);
+      const expectedPrice2 = ((INITIAL_PRICE * 103n) / 100n * 103n) / 100n;
+      expect(price2).to.equal(expectedPrice2);
+
+      // Prices should be different
+      expect(price2 > price1).to.be.true;
+    });
+
+    it("Should return correct price for specific week vs current week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+      const url = "https://app1.com";
+
+      // Vote in current week
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+      });
+
+      const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
+
+      // Both functions should return same price for current week
+      const priceSpecific = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      const priceCurrent = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
+      
+      expect(priceSpecific).to.equal(expectedPrice);
+      expect(priceCurrent).to.equal(expectedPrice);
+      expect(priceSpecific).to.equal(priceCurrent);
+    });
+
+    it("Should match actual vote cost with getPriceForNextVote", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const appHash = getAppHash("https://app1.com");
+      const url = "https://app1.com";
+
+      // Get price before first vote
+      const priceBefore = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceBefore).to.equal(INITIAL_PRICE);
+
+      // Vote and check balance change matches price
+      const balanceBefore = await mockERC20.read.balanceOf([user1.account.address]);
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+      });
+      const balanceAfter = await mockERC20.read.balanceOf([user1.account.address]);
+      const actualCost = balanceBefore - balanceAfter;
+
+      expect(actualCost).to.equal(priceBefore);
+
+      // Get price for next vote
+      const priceAfter = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfter).to.equal((INITIAL_PRICE * 103n) / 100n);
+
+      // Second vote should cost the price we just queried
+      const balanceBefore2 = await mockERC20.read.balanceOf([user2.account.address]);
+      await contract.write.vote([appHash, url], {
+        account: user2.account,
+      });
+      const balanceAfter2 = await mockERC20.read.balanceOf([user2.account.address]);
+      const actualCost2 = balanceBefore2 - balanceAfter2;
+
+      expect(actualCost2).to.equal(priceAfter);
+    });
+  });
 });
 

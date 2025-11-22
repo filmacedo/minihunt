@@ -2,7 +2,7 @@
 
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
-import { formatUSDC } from "@/lib/app-utils";
+import { formatUnits } from "viem";
 
 interface ClaimModalProps {
   weekId: string;
@@ -11,7 +11,7 @@ interface ClaimModalProps {
 }
 
 export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
-  const earnedFormatted = formatUSDC(earned);
+  const earnedFormatted = formatUnits(BigInt(earned), 6);
 
   const handleClaim = () => {
     // TODO: Implement claim transaction

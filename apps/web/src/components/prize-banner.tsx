@@ -1,6 +1,6 @@
 import { Icons } from "@/components/ui/icons";
 import { WeekData } from "@/lib/types";
-import { formatUSDC } from "@/lib/app-utils";
+import { formatUnits } from "viem";
 import { useMemo } from "react";
 
 interface PrizeBannerProps {
@@ -13,18 +13,21 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
     const end = new Date(week.endTime);
     const now = new Date();
     const diff = end.getTime() - now.getTime();
-    
+
     if (diff <= 0) return "Ended";
-    
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     return `${days}d ${hours}h ${minutes}m`;
   }, [week]);
 
-  const prizePool = week ? formatUSDC(week.prizePool) : "0";
+  // USDC has 6 decimals, not 18 like CELO
+  const prizePool = week ? formatUnits(BigInt(week.prizePool), 6) : "0";
   const weekNumber = week?.id ? `Week ${week.id}` : "Week 12";
+  const totalVoters = week ? parseInt(week.totalVoters, 10) : 0;
+  const totalUniqueVoters = week ? parseInt(week.totalUniqueVoters, 10) : 0;
 
   return (
     <div className="px-4 py-8 text-center space-y-6 border-b border-border bg-background">
@@ -43,9 +46,19 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
         </div>
       </div>
 
-      <div className="inline-flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full font-mono">
-        <Icons.Timer className="w-4 h-4" />
-        <span>Ends in: {timeLeft}</span>
+      <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground overflow-x-auto -mx-4 px-4">
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
+          <Icons.Users className="w-4 h-4" />
+          <span>{totalUniqueVoters.toLocaleString()} voters</span>
+        </div>
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
+          <Icons.Users className="w-4 h-4" />
+          <span>{totalVoters.toLocaleString()} votes</span>
+        </div>
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
+          <Icons.Timer className="w-4 h-4" />
+          <span>Ends in: {timeLeft}</span>
+        </div>
       </div>
     </div>
   );

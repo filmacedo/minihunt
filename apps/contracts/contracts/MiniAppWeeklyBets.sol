@@ -603,6 +603,27 @@ contract MiniAppWeeklyBets is Ownable {
         return weekVotesByUser[weekIdx][appHash][user];
     }
 
+    /**
+     * @notice Get the price for the next vote on a specific app in a week.
+     * @param weekIdx The week index to check
+     * @param appHash The app hash to check
+     * @return The price in cUSD for the next vote (returns initialPrice if app hasn't been voted on yet this week)
+     */
+    function getPriceForNextVote(uint256 weekIdx, bytes32 appHash) public view returns (uint256) {
+        AppWeekInfo storage ai = weekAppInfo[weekIdx][appHash];
+        return ai.price == 0 ? initialPrice : ai.price;
+    }
+
+    /**
+     * @notice Get the price for the next vote on a specific app in the current week.
+     * @param appHash The app hash to check
+     * @return The price in cUSD for the next vote (returns initialPrice if app hasn't been voted on yet this week)
+     */
+    function getPriceForNextVoteCurrentWeek(bytes32 appHash) external view returns (uint256) {
+        AppWeekInfo storage ai = weekAppInfo[currentWeek][appHash];
+        return ai.price == 0 ? initialPrice : ai.price;
+    }
+
     // get winners stored for week (empty arrays if not finalized)
     function getWinnersForWeek(uint256 weekIdx) external view returns (
         bytes32[] memory firstGroup,

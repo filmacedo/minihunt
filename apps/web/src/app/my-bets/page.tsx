@@ -6,7 +6,7 @@ import { TopNav } from "@/components/navbar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { useUserVotes } from "@/hooks/use-user-votes";
-import { formatUSDC } from "@/lib/app-utils";
+import { formatUnits } from "viem";
 
 // Reuse these modals
 import { SubmitAppModal } from "@/components/modals/submit-app-modal";
@@ -63,7 +63,7 @@ export default function MyBetsPage() {
                      </div>
                      <div className="text-right">
                         <span className="font-mono text-foreground">
-                           {formatUSDC(currentSpent.toString())} USDC
+                           {formatUnits(currentSpent, 6)} USDC
                         </span>
                      </div>
                   </div>
@@ -74,7 +74,7 @@ export default function MyBetsPage() {
                         Total Spent
                       </div>
                       <div className="font-mono text-foreground text-lg">
-                        {formatUSDC(currentSpent.toString())} USDC
+                        {formatUnits(currentSpent, 6)} USDC
                       </div>
                     </div>
                     <div className="text-right">
@@ -82,7 +82,7 @@ export default function MyBetsPage() {
                         Projected Win
                       </div>
                       <div className="font-mono text-foreground text-lg text-[#E1FF00] dark:text-[#E1FF00] text-green-600">
-                        {formatUSDC(currentEarned.toString())} USDC
+                        {formatUnits(currentEarned, 6)} USDC
                       </div>
                     </div>
                   </div>
@@ -132,7 +132,7 @@ export default function MyBetsPage() {
                       </div>
                       <div className="flex items-center gap-3">
                          <span className={cn("font-mono text-sm", isWinner ? "text-[#E1FF00] dark:text-[#E1FF00] text-green-600" : "text-muted-foreground")}>
-                           {isWinner ? `+${formatUSDC(earned.toString())} USDC` : "No Win"}
+                           {isWinner ? `+${formatUnits(earned, 6)} USDC` : "No Win"}
                          </span>
                          <Icons.ChevronRight
                            className={cn(
@@ -147,11 +147,11 @@ export default function MyBetsPage() {
                       <div className="px-4 pb-4 pt-0">
                          <div className="pt-4 border-t border-border/50 flex justify-between">
                             <span className="text-muted-foreground">Total Spent:</span>
-                            <span className="font-mono text-foreground">{formatUSDC(spent.toString())} USDC</span>
+                            <span className="font-mono text-foreground">{formatUnits(spent, 6)} USDC</span>
                          </div>
                          <div className="pt-2 flex justify-between">
                             <span className="text-muted-foreground">Total Earned:</span>
-                            <span className="font-mono text-foreground">{formatUSDC(earned.toString())} USDC</span>
+                            <span className="font-mono text-foreground">{formatUnits(earned, 6)} USDC</span>
                          </div>
                       </div>
                     )}

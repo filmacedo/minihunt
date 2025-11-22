@@ -10,6 +10,7 @@ import {
   Check,
   AlertCircle,
   ExternalLink,
+  Users,
 } from "lucide-react";
 
 export const Icons = {
@@ -24,4 +25,5 @@ export const Icons = {
   Check,
   Alert: AlertCircle,
   ExternalLink,
+  Users,
 };

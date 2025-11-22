@@ -11,20 +11,6 @@ export function formatCurrency(amount: number, currency = "USD"): string {
 }
 
 /**
- * Format USDC amount (6 decimals) with max 2 decimal places
- */
-export function formatUSDC(amount: bigint | string): string {
-  const amountBigInt = typeof amount === "string" ? BigInt(amount) : amount;
-  const formatted = formatUnits(amountBigInt, 6); // USDC has 6 decimals
-  const num = parseFloat(formatted);
-
-  // Format with max 2 decimals, removing trailing zeros
-  const fixed = num.toFixed(2);
-  // Remove trailing zeros and decimal point if not needed
-  return fixed.replace(/\.?0+$/, "");
-}
-
-/**
  * Truncate an address for display
  */
 export function truncateAddress(

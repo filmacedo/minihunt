@@ -10,7 +10,7 @@
  */
 
 import { execSync } from "child_process";
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { writeFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -310,11 +310,17 @@ async function deploy() {
 
     // Reset deployment if requested
     if (args.reset) {
-      baseCommand += " --reset";
-      console.log("   🔄 Reset flag enabled - will reset previous deployment state");
+      // Manually delete the deployment state directory to avoid the reset prompt
+      const deploymentDir = join(process.cwd(), "ignition", "deployments", `chain-${networkConfig.chainId}`);
+      if (existsSync(deploymentDir)) {
+        console.log("   🗑️  Deleting existing deployment state directory...");
+        rmSync(deploymentDir, { recursive: true, force: true });
+        console.log("   ✅ Deployment state directory deleted");
+      }
+      console.log("   🔄 Reset flag enabled - will deploy fresh");
     }
     
-    // Pipe 'y' to auto-confirm the deployment prompt
+    // Pipe confirmation to auto-confirm the deployment prompt
     const command = `echo "y" | ${baseCommand}`;
 
     console.log("\n📝 Executing deployment command...");
