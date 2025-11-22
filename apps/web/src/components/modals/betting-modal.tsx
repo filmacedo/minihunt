@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { MiniApp } from "@/lib/types";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther } from "viem";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
+import { keccak256, stringToHex, formatUnits } from "viem";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
+import { normalizeUrl } from "@/lib/miniapp-utils";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 
 interface BettingModalProps {
@@ -19,9 +20,50 @@ interface BettingModalProps {
 }
 
 export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalProps) {
-  const [amount, setAmount] = useState("1");
   const { context } = useMiniApp();
   const { post } = useApi();
+  const [priceChanged, setPriceChanged] = useState(false);
+  const previousPriceRef = useRef<bigint | null>(null);
+  
+  // Calculate app hash
+  const appHash = app?.frameUrl ? keccak256(stringToHex(normalizeUrl(app.frameUrl))) : undefined;
+
+  // Read price from contract with 5 second polling
+  // Celo Sepolia chainId: 11142220
+  const { data: price, error: priceError } = useReadContract({
+    address: process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`,
+    abi: MINI_APP_WEEKLY_BETS_ABI,
+    functionName: 'getPriceForNextVoteCurrentWeek',
+    args: appHash ? [appHash] : undefined,
+    chainId: 11142220, // Celo Sepolia
+    query: {
+      enabled: !!appHash && isOpen && !!process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS,
+      refetchInterval: 5000, // Refetch every 5 seconds
+    },
+  });
+
+  // Log for debugging
+  useEffect(() => {
+    if (priceError) {
+      console.error("Price fetch error:", priceError);
+    }
+  }, [priceError]);
+  
+  // Track price changes
+  useEffect(() => {
+    const currentPrice = price as bigint | undefined;
+    if (currentPrice !== undefined && previousPriceRef.current !== null) {
+      if (currentPrice !== previousPriceRef.current) {
+        setPriceChanged(true);
+        // Auto-hide notice after 3 seconds
+        const timer = setTimeout(() => setPriceChanged(false), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+    if (currentPrice !== undefined) {
+      previousPriceRef.current = currentPrice;
+    }
+  }, [price]);
   
   // Write Contract Hook
   const { data: hash, isPending, writeContract } = useWriteContract();
@@ -30,17 +72,20 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
+  
+  // Format price for display (USDC has 6 decimals)
+  const priceBigInt = price as bigint | undefined;
+  const priceFormatted = priceBigInt ? formatUnits(priceBigInt, 6) : "0";
 
   const handleBet = async () => {
-    if (!amount || !app) return;
+    if (!app || !appHash) return;
     
     try {
       writeContract({
         address: process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`,
         abi: MINI_APP_WEEKLY_BETS_ABI,
         functionName: 'vote',
-        args: [parseEther(amount), app.frameUrl],
-        value: parseEther(amount),
+        args: [appHash, app.frameUrl],
       });
     } catch (error) {
       console.error("Betting failed:", error);
@@ -84,33 +129,17 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-6">
-        {["1", "5", "10"].map((val) => (
-          <button
-            key={val}
-            onClick={() => setAmount(val)}
-            className={`py-2 rounded-xl text-sm font-bold font-mono transition-colors border ${
-              amount === val 
-                ? "bg-foreground text-background border-foreground" 
-                : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
-            }`}
-          >
-            {val} USDC
-          </button>
-        ))}
-      </div>
+      {priceChanged && (
+        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-sm text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
+          <Icons.Alert className="h-4 w-4" />
+          <span>Price has changed! Please review the new amount.</span>
+        </div>
+      )}
       
       <div className="mb-6">
         <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full bg-background border border-input rounded-xl h-14 px-4 text-foreground font-mono text-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-center"
-            placeholder="Enter amount"
-          />
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
-            USDC
+          <div className="mt-2 text-xs text-center text-muted-foreground">
+            Current voting price (updates every 5 seconds)
           </div>
         </div>
       </div>
@@ -118,7 +147,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
       <Button
         className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono disabled:opacity-50"
         onClick={handleBet}
-        disabled={isPending || isConfirming || !amount}
+        disabled={isPending || isConfirming || !priceBigInt || !appHash}
       >
         {isPending ? (
           <>
@@ -131,7 +160,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
             Processing...
           </>
         ) : (
-          `Bet ${amount} USDC`
+          `Bet ${priceFormatted} USDC`
         )}
       </Button>
     </ModalWrapper>
