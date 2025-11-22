@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
  * @returns The farcaster manifest for the frame
  */
 export async function getFarcasterManifest() {
-  const frameName = "farcaster-miniapp";
+  const frameName = "MiniHunt";
   const appUrl = env.NEXT_PUBLIC_URL;
   const noindex =
     appUrl.includes("localhost") ||

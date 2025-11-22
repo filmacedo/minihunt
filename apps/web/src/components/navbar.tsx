@@ -1,25 +1,21 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import Image from "next/image"
-import { usePathname } from "next/navigation"
-import { Menu, ExternalLink } from "lucide-react"
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { Menu, ExternalLink } from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navLinks = [
   { name: "Home", href: "/" },
   { name: "Docs", href: "https://docs.celo.org", external: true },
-]
+];
 
 export function Navbar() {
-  const pathname = usePathname()
-  
+  const pathname = usePathname();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-4">
@@ -34,10 +30,7 @@ export function Navbar() {
             </SheetTrigger>
             <SheetContent side="left" className="w-80">
               <div className="flex items-center gap-2 mb-8">
-
-                <span className="font-bold text-lg">
-                  farcaster-miniapp
-                </span>
+                <span className="font-bold text-lg">MiniHunt</span>
               </div>
               <nav className="flex flex-col gap-4">
                 {navLinks.map((link) => (
@@ -47,7 +40,9 @@ export function Navbar() {
                     target={link.external ? "_blank" : undefined}
                     rel={link.external ? "noopener noreferrer" : undefined}
                     className={`flex items-center gap-2 text-base font-medium transition-colors hover:text-primary ${
-                      pathname === link.href ? "text-foreground" : "text-foreground/70"
+                      pathname === link.href
+                        ? "text-foreground"
+                        : "text-foreground/70"
                     }`}
                   >
                     {link.name}
@@ -62,14 +57,16 @@ export function Navbar() {
           </Sheet>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-
+          <Link
+            href="/"
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
             <span className="hidden font-bold text-xl sm:inline-block">
-              farcaster-miniapp
+              MiniHunt
             </span>
           </Link>
         </div>
-        
+
         {/* Desktop navigation */}
         <nav className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
@@ -88,12 +85,14 @@ export function Navbar() {
               {link.external && <ExternalLink className="h-4 w-4" />}
             </Link>
           ))}
-          
+
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">Connect Wallet</Button>
+            <Button variant="outline" size="sm">
+              Connect Wallet
+            </Button>
           </div>
         </nav>
       </div>
     </header>
-  )
+  );
 }

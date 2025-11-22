@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       // Send a test notification
       await sendFrameNotification({
         fid,
-        title: "Welcome to farcaster-miniapp!",
+        title: "Welcome to MiniHunt!",
         body: "You've successfully enabled notifications.",
       });
 

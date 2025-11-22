@@ -14,10 +14,10 @@ const frame = {
   version: "1",
   imageUrl: `${appUrl}/opengraph-image.png`,
   button: {
-    title: "Launch farcaster-miniapp",
+    title: "Launch MiniHunt",
     action: {
       type: "launch_frame",
-      name: "farcaster-miniapp",
+      name: "MiniHunt",
       url: appUrl,
       splashImageUrl: `${appUrl}/icon.png`,
       splashBackgroundColor: "#ffffff",
