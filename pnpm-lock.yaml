@@ -69,6 +69,9 @@ importers:
       '@farcaster/frame-sdk':
         specifier: ^0.0.61
         version: 0.0.61(typescript@5.9.3)(zod@3.25.76)
+      '@farcaster/miniapp-sdk':
+        specifier: ^0.2.1
+        version: 0.2.1(typescript@5.9.3)(zod@3.25.76)
       '@farcaster/miniapp-wagmi-connector':
         specifier: latest
         version: 1.1.0(@farcaster/miniapp-sdk@0.2.1)(@wagmi/core@2.22.1)(viem@2.39.3)

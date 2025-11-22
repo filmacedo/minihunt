@@ -13,6 +13,7 @@ import { formatEther } from "viem";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
+import { sdk as miniappSdk } from "@farcaster/miniapp-sdk";
 
 export default function Home() {
   const { leaderboard: apps, week: appsWeek, isLoading: appsLoading, refetch: refetchApps } = useLeaderboard();
@@ -44,6 +45,23 @@ export default function Home() {
     refetchApps();
     // Add toast notification here later
     handleCloseModal();
+  };
+
+  const handleViewProfile = async (fid: string) => {
+    try {
+      const fidNumber = parseInt(fid, 10);
+      if (isNaN(fidNumber)) {
+        console.error("Invalid FID:", fid);
+        return;
+      }
+      // Use @farcaster/miniapp-sdk for viewProfile action
+      const data = await miniappSdk.actions.viewProfile({ fid: 2 });
+      console.log("Profile data:", data);
+      // Open profile in new tab
+      return data;
+    } catch (error) {
+      console.error("Error viewing profile:", error);
+    }
   };
 
   return (
@@ -154,9 +172,10 @@ export default function Home() {
               <div className="text-center py-10 text-muted-foreground">No votes cast yet this week.</div>
             ) : (
               voters.map((voter, i) => (
-                <div
+                <button
                   key={voter.fid}
-                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px]"
+                  onClick={() => handleViewProfile(voter.fid)}
+                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px] w-full text-left hover:bg-muted/50 active:bg-muted transition-colors cursor-pointer"
                 >
                   <div className="flex-none w-8 text-center">
                     <span className="text-sm font-bold text-muted-foreground font-mono">
@@ -187,7 +206,7 @@ export default function Home() {
                       Est. win
                     </div>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
