@@ -33,6 +33,7 @@ contract MiniAppWeeklyBets is Ownable {
     /* ========== STATE ========== */
     address public protocolRecipient;
     uint256 public currentWeek; // active week for voting
+    uint256 public totalPrizePools; // cumulative total of all prize pools ever stored (never decreases)
 
     // global registry of apps (persist across weeks)
     mapping(bytes32 => bool) public appRegistered;
@@ -46,6 +47,7 @@ contract MiniAppWeeklyBets is Ownable {
 
     // Flattened struct fields (cannot use struct in mapping due to Hardhat 3 limitation)
     mapping(uint256 => uint256) internal weekPrizePool; // weekIdx => prize pool
+    mapping(uint256 => uint256) internal weekTotalPrizePool; // weekIdx => cumulative total prize pool ever stored for this week (never decreases)
     mapping(uint256 => uint256) internal weekProtocolCollected; // weekIdx => protocol collected
     mapping(uint256 => bool) internal weekFinalized; // weekIdx => finalized
     mapping(uint256 => uint256) internal weekFirstVotes; // weekIdx => first place votes
@@ -133,6 +135,8 @@ contract MiniAppWeeklyBets is Ownable {
 
         weekProtocolCollected[currentWeek] += protocolFee;
         weekPrizePool[currentWeek] += poolShare;
+        weekTotalPrizePool[currentWeek] += poolShare;
+        totalPrizePools += poolShare;
 
         // mark app as registered globally (persist)
         if (!appRegistered[appHash]) {
@@ -308,6 +312,185 @@ contract MiniAppWeeklyBets is Ownable {
         return (userVotes * appBucket) / appVotes;
     }
 
+    // Helper: calculate payout from a group of apps (memory version for on-the-fly computation)
+    function _calculateGroupPayoutMemory(
+        uint256 weekIdx,
+        address user,
+        bytes32[] memory group,
+        uint256 pool,
+        uint256 totalPct
+    ) internal view returns (uint256) {
+        if (group.length == 0) return 0;
+        uint256 perAppPct = totalPct / group.length;
+        uint256 payout = 0;
+        for (uint256 i = 0; i < group.length; i++) {
+            bytes32 app = group[i];
+            uint256 appVotes = weekAppInfo[weekIdx][app].votes;
+            if (appVotes == 0) continue;
+            uint256 userVotes = weekVotesByUser[weekIdx][app][user];
+            if (userVotes == 0) continue;
+            uint256 appBucket = (pool * perAppPct) / 100;
+            payout += (userVotes * appBucket) / appVotes;
+        }
+        return payout;
+    }
+
+    // Helper to get votes for an app
+    function _getAppVotes(uint256 weekIdx, bytes32 app) internal view returns (uint256) {
+        return weekAppInfo[weekIdx][app].votes;
+    }
+
+    // Find top 3 vote counts
+    function _findTop3(uint256 weekIdx, bytes32[] memory apps) internal view returns (uint256 max1, uint256 max2, uint256 max3) {
+        max1 = 0;
+        max2 = 0;
+        max3 = 0;
+        uint256 n = apps.length;
+        
+        for (uint256 i = 0; i < n; i++) {
+            uint256 v = _getAppVotes(weekIdx, apps[i]);
+            if (v == 0) continue; // Skip apps with no votes
+            
+            if (v > max1) {
+                max3 = max2;
+                max2 = max1;
+                max1 = v;
+            } else if (v < max1 && v > max2) {
+                max3 = max2;
+                max2 = v;
+            } else if (v < max2 && v > max3) {
+                max3 = v;
+            }
+        }
+    }
+
+    // Count groups
+    function _countGroups(uint256 weekIdx, bytes32[] memory apps, uint256 max1, uint256 max2, uint256 max3) internal view returns (uint256 cnt1, uint256 cnt2, uint256 cnt3) {
+        cnt1 = 0;
+        cnt2 = 0;
+        cnt3 = 0;
+        uint256 n = apps.length;
+        
+        for (uint256 i = 0; i < n; i++) {
+            uint256 v = _getAppVotes(weekIdx, apps[i]);
+            if (v == 0) continue; // Skip apps with no votes
+            
+            if (v == max1) {
+                cnt1++;
+            } else if (v == max2) {
+                cnt2++;
+            } else if (v == max3) {
+                cnt3++;
+            }
+        }
+    }
+
+    // Populate groups
+    function _populateGroups(uint256 weekIdx, bytes32[] memory apps, uint256 max1, uint256 max2, uint256 max3, bytes32[] memory firstGroup, bytes32[] memory secondGroup, bytes32[] memory thirdGroup) internal view {
+        uint256 idx1 = 0;
+        uint256 idx2 = 0;
+        uint256 idx3 = 0;
+        uint256 n = apps.length;
+
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 app = apps[i];
+            uint256 v = _getAppVotes(weekIdx, app);
+            if (v == 0) continue; // Skip apps with no votes
+            
+            if (v == max1) {
+                firstGroup[idx1++] = app;
+            } else if (v == max2) {
+                secondGroup[idx2++] = app;
+            } else if (v == max3) {
+                thirdGroup[idx3++] = app;
+            }
+        }
+    }
+
+    // Compute winners on the fly (view function for non-finalized weeks)
+    function _computeWinnersView(uint256 weekIdx) internal view returns (
+        bytes32[] memory firstGroup,
+        bytes32[] memory secondGroup,
+        bytes32[] memory thirdGroup,
+        uint256 firstVotes,
+        uint256 secondVotes,
+        uint256 thirdVotes
+    ) {
+        bytes32[] memory apps = weekApps[weekIdx];
+        if (apps.length == 0) {
+            return (firstGroup, secondGroup, thirdGroup, 0, 0, 0);
+        }
+
+        // Find top 3
+        (firstVotes, secondVotes, thirdVotes) = _findTop3(weekIdx, apps);
+
+        // Count groups
+        (uint256 cnt1, uint256 cnt2, uint256 cnt3) = _countGroups(weekIdx, apps, firstVotes, secondVotes, thirdVotes);
+
+        // Allocate arrays
+        firstGroup = new bytes32[](cnt1);
+        secondGroup = new bytes32[](cnt2);
+        thirdGroup = new bytes32[](cnt3);
+
+        // Populate groups
+        _populateGroups(weekIdx, apps, firstVotes, secondVotes, thirdVotes, firstGroup, secondGroup, thirdGroup);
+    }
+
+    // Compute payout for user using computed winners (for non-finalized weeks)
+    function _computePayoutForUserWithWinners(
+        uint256 weekIdx,
+        address user,
+        bytes32[] memory firstGroup,
+        bytes32[] memory secondGroup,
+        bytes32[] memory thirdGroup,
+        uint256 firstVotes,
+        uint256 secondVotes,
+        uint256 thirdVotes
+    ) internal view returns (uint256) {
+        uint256 pool = weekPrizePool[weekIdx];
+        if (pool == 0) return 0;
+
+        // If firstGroup size >=3 -> split 100% equally among firstGroup apps
+        if (firstGroup.length >= 3) {
+            return _calculateGroupPayoutMemory(weekIdx, user, firstGroup, pool, 100);
+        }
+
+        // If two tie for first -> they share 90% equally
+        if (firstGroup.length == 2) {
+            uint256 firstPayout = _calculateGroupPayoutMemory(weekIdx, user, firstGroup, pool, 90);
+            // third handling (if present)
+            if (thirdVotes > 0 && thirdGroup.length > 0) {
+                firstPayout += _calculateGroupPayoutMemory(weekIdx, user, thirdGroup, pool, 10);
+            }
+            return firstPayout;
+        }
+
+        uint256 payout = 0;
+
+        // Normal case: single firstGroup app (or empty)
+        if (firstGroup.length == 1 && firstVotes > 0) {
+            payout += _calculateSingleAppPayout(weekIdx, user, firstGroup[0], pool, 60, firstVotes);
+        }
+
+        // second group
+        if (secondVotes > 0 && secondGroup.length > 0) {
+            if (secondGroup.length > 1) {
+                // tie for second => they share 40% (30+10)
+                payout += _calculateGroupPayoutMemory(weekIdx, user, secondGroup, pool, 40);
+            } else {
+                // single second app => 30%
+                payout += _calculateSingleAppPayout(weekIdx, user, secondGroup[0], pool, 30, secondVotes);
+            }
+        }
+
+        // third group only if not already included
+        if (thirdVotes > 0 && thirdGroup.length > 0 && firstGroup.length != 2) {
+            payout += _calculateGroupPayoutMemory(weekIdx, user, thirdGroup, pool, 10);
+        }
+
+        return payout;
+    }
+
     // compute user's payout given stored winners in week
     function _computePayoutForUser(uint256 weekIdx, address user) internal view returns (uint256) {
         uint256 pool = weekPrizePool[weekIdx];
@@ -422,6 +605,15 @@ contract MiniAppWeeklyBets is Ownable {
         return weekPrizePool[weekIdx];
     }
 
+    /**
+     * @notice Get the cumulative total prize pool ever stored for a specific week (never decreases).
+     * @param weekIdx The week index to check
+     * @return The cumulative total amount in cUSD that was ever added to this week's prize pool
+     */
+    function getWeekTotalPrizePool(uint256 weekIdx) external view returns (uint256) {
+        return weekTotalPrizePool[weekIdx];
+    }
+
     function getWeekProtocolCollected(uint256 weekIdx) external view returns (uint256) {
         return weekProtocolCollected[weekIdx];
     }
@@ -432,6 +624,116 @@ contract MiniAppWeeklyBets is Ownable {
 
     function getWeekUserTotalVotes(uint256 weekIdx, address user) external view returns (uint256) {
         return weekUserTotalVotes[weekIdx][user];
+    }
+
+    /**
+     * @notice Get the payout amount a voter would receive for a specific week.
+     * Works for both finalized and non-finalized weeks, showing current potential winnings.
+     * @param weekIdx The week index to check
+     * @param voter The address of the voter
+     * @return The payout amount in cUSD (0 if voter didn't vote or not eligible)
+     */
+    // Helper to compute payout for non-finalized week
+    function _computePayoutNonFinalized(uint256 weekIdx, address voter, uint256 max1, uint256 max2, uint256 max3) internal view returns (uint256) {
+        bytes32[] memory apps = weekApps[weekIdx];
+        uint256 pool = weekPrizePool[weekIdx];
+        if (pool == 0) return 0;
+        
+        // Count groups
+        uint256 cnt1 = 0;
+        uint256 cnt2 = 0;
+        uint256 cnt3 = 0;
+        uint256 n = apps.length;
+        for (uint256 i = 0; i < n; i++) {
+            uint256 v = weekAppInfo[weekIdx][apps[i]].votes;
+            if (v == max1) cnt1++;
+            else if (v == max2) cnt2++;
+            else if (v == max3) cnt3++;
+        }
+        
+        // Compute payout - inline to reduce parameters
+        uint256 payout = 0;
+        
+        if (cnt1 >= 3) {
+            for (uint256 i = 0; i < n; i++) {
+                if (weekAppInfo[weekIdx][apps[i]].votes == max1) {
+                    uint256 userVotes = weekVotesByUser[weekIdx][apps[i]][voter];
+                    if (userVotes > 0) {
+                        payout += (userVotes * pool) / (cnt1 * max1);
+                    }
+                }
+            }
+        } else if (cnt1 == 2) {
+            for (uint256 i = 0; i < n; i++) {
+                bytes32 app = apps[i];
+                uint256 v = weekAppInfo[weekIdx][app].votes;
+                uint256 userVotes = weekVotesByUser[weekIdx][app][voter];
+                if (userVotes == 0) continue;
+                if (v == max1) {
+                    payout += (userVotes * pool * 90) / (200 * max1);
+                } else if (v == max3 && cnt3 > 0) {
+                    payout += (userVotes * pool * 10) / (100 * cnt3 * max3);
+                }
+            }
+        } else {
+            for (uint256 i = 0; i < n; i++) {
+                bytes32 app = apps[i];
+                uint256 v = weekAppInfo[weekIdx][app].votes;
+                uint256 userVotes = weekVotesByUser[weekIdx][app][voter];
+                if (userVotes == 0) continue;
+                
+                if (v == max1 && cnt1 == 1) {
+                    payout += (userVotes * pool * 60) / (100 * max1);
+                } else if (v == max2) {
+                    if (cnt2 > 1) {
+                        payout += (userVotes * pool * 40) / (100 * cnt2 * max2);
+                    } else {
+                        payout += (userVotes * pool * 30) / (100 * max2);
+                    }
+                } else if (v == max3 && cnt1 != 2) {
+                    payout += (userVotes * pool * 10) / (100 * cnt3 * max3);
+                }
+            }
+        }
+        return payout;
+    }
+
+    /**
+     * @notice Get the payout amount a voter would receive for a specific week.
+     * Works for both finalized and non-finalized weeks, showing current potential winnings.
+     * @param weekIdx The week index to check
+     * @param voter The address of the voter
+     * @return The payout amount in cUSD (0 if voter didn't vote or not eligible)
+     */
+    function getUserPayoutForWeek(uint256 weekIdx, address voter) external view returns (uint256) {
+        if (weekUserTotalVotes[weekIdx][voter] == 0) {
+            return 0;
+        }
+        
+        if (weekFinalized[weekIdx]) {
+            return _computePayoutForUser(weekIdx, voter);
+        }
+        
+        // If week is not finalized, compute winners on the fly
+        (
+            bytes32[] memory firstGroup,
+            bytes32[] memory secondGroup,
+            bytes32[] memory thirdGroup,
+            uint256 firstVotes,
+            uint256 secondVotes,
+            uint256 thirdVotes
+        ) = _computeWinnersView(weekIdx);
+        
+        return _computePayoutForUserWithWinners(
+            weekIdx,
+            voter,
+            firstGroup,
+            secondGroup,
+            thirdGroup,
+            firstVotes,
+            secondVotes,
+            thirdVotes
+        );
     }
 }
 
