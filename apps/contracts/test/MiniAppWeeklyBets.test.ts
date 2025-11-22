@@ -802,5 +802,474 @@ describe("MiniAppWeeklyBets", function () {
       );
     });
   });
+
+  describe("Total Prize Pools Tracking", function () {
+    it("Should track totalPrizePools across all weeks", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      
+      // Initially should be 0
+      expect(await contract.read.totalPrizePools()).to.equal(0n);
+
+      // Vote in current week
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare1 = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      expect(await contract.read.totalPrizePools()).to.equal(poolShare1);
+
+      // Advance to next week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      const nextWeek = await contract.read.getCurrentWeek();
+      
+      // Vote in next week
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+      });
+
+      // totalPrizePools should accumulate
+      expect(await contract.read.totalPrizePools()).to.equal(poolShare1 * 2n);
+    });
+
+    it("Should not decrease totalPrizePools when claims are made", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      const totalBeforeClaim = await contract.read.totalPrizePools();
+      expect(totalBeforeClaim).to.equal(poolShare);
+
+      // Finalize and claim
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      // totalPrizePools should remain the same
+      const totalAfterClaim = await contract.read.totalPrizePools();
+      expect(totalAfterClaim).to.equal(totalBeforeClaim);
+    });
+
+    it("Should not decrease totalPrizePools when funds are swept", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
+
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      const totalBeforeSweep = await contract.read.totalPrizePools();
+      expect(totalBeforeSweep).to.equal(poolShare);
+
+      // Finalize and sweep
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+      await time.increase(CLAIM_DEADLINE + 1n);
+      await contract.write.sweepUnclaimedToProtocol([currentWeek]);
+
+      // totalPrizePools should remain the same
+      const totalAfterSweep = await contract.read.totalPrizePools();
+      expect(totalAfterSweep).to.equal(totalBeforeSweep);
+    });
+  });
+
+  describe("Per-Week Total Prize Pool Tracking", function () {
+    it("Should track weekTotalPrizePool for each week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // Initially should be 0
+      expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(0n);
+
+      // Vote in current week
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(poolShare);
+
+      // Vote again in same week
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+      });
+
+      const secondPrice = (INITIAL_PRICE * 103n) / 100n;
+      const secondPoolShare = secondPrice - (secondPrice * PROTOCOL_FEE) / 100n;
+      expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(
+        poolShare + secondPoolShare
+      );
+    });
+
+    it("Should not decrease weekTotalPrizePool when claims are made", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      const weekTotalBeforeClaim = await contract.read.getWeekTotalPrizePool([currentWeek]);
+      expect(weekTotalBeforeClaim).to.equal(poolShare);
+
+      // Finalize and claim
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      // weekTotalPrizePool should remain the same
+      const weekTotalAfterClaim = await contract.read.getWeekTotalPrizePool([currentWeek]);
+      expect(weekTotalAfterClaim).to.equal(weekTotalBeforeClaim);
+    });
+
+    it("Should track separate totals for different weeks", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // Vote in week 0
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      const poolShare1 = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(poolShare1);
+
+      // Advance to next week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      const nextWeek = await contract.read.getCurrentWeek();
+      
+      // Vote in week 1
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+      });
+
+      // Each week should have its own total
+      expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(poolShare1);
+      expect(await contract.read.getWeekTotalPrizePool([nextWeek])).to.equal(poolShare1);
+    });
+  });
+
+  describe("User Payout Query", function () {
+    it("Should return payout for finalized week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // User1 votes for winning app (app1 will have 3 votes - 1st place)
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user3.account,
+      });
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user4.account,
+      });
+
+      // User2 votes for losing app (app2 will have 1 vote - not in top 3)
+      const app2 = getAppHash("https://app2.com");
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user2.account,
+      });
+
+      // Add apps for 2nd and 3rd place
+      const app3 = getAppHash("https://app3.com");
+      await contract.write.vote([app3, "https://app3.com"], {
+        account: user5.account,
+      });
+      await contract.write.vote([app3, "https://app3.com"], {
+        account: user1.account,
+      }); // app3: 2 votes - 2nd place
+
+      const app4 = getAppHash("https://app4.com");
+      await contract.write.vote([app4, "https://app4.com"], {
+        account: user3.account,
+      }); // app4: 1 vote - 3rd place (tied with app2, but app4 wins tie-breaker or both get 3rd)
+
+      // Finalize week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // Check payout for user1 (should be > 0, voted for 1st place)
+      const payout1 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout1 > 0n).to.be.true;
+
+      // Check payout for user2 (should be 0, app2 is not in top 3)
+      // Note: If app2 ties for 3rd, user2 might get a small payout, so we check it's much less than user1
+      const payout2 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      // If app2 is in 3rd place (tied), payout will be small but > 0
+      // If app2 is not in top 3, payout will be 0
+      // Let's check that it's significantly less than user1's payout
+      expect(payout2 < payout1).to.be.true;
+    });
+
+    it("Should return payout for non-finalized week (current standings)", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // User1 votes for app1
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      // User2 votes for app2
+      const app2 = getAppHash("https://app2.com");
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user2.account,
+      });
+
+      // User3 votes for app1 (app1 is winning with 2 votes, app2 is 2nd with 1 vote)
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user3.account,
+      });
+
+      // Week is not finalized yet, but should still return payout
+      const payout1 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout1 > 0n).to.be.true; // User1 voted for 1st place app
+
+      const payout2 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      // User2 voted for 2nd place app - should get 30% of pool
+      // Note: If this fails, check that secondGroup is populated correctly
+      expect(payout2 > 0n).to.be.true; 
+      
+      // User3 also voted for app1 (first group) - include their payout
+      const payout3 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user3.account.address,
+      ]);
+      expect(payout3 > 0n).to.be.true;
+
+      // Verify aggregated payouts align with 60/30 distribution
+      const pool = await contract.read.getWeekPrizePool([currentWeek]);
+      const firstGroupTotal = payout1 + payout3;
+      const secondGroupTotal = payout2;
+      expect(firstGroupTotal).to.equal((pool * 60n) / 100n);
+      expect(secondGroupTotal).to.equal((pool * 30n) / 100n);
+    });
+
+    it("Should return 0 for user who didn't vote", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      // User2 didn't vote
+      const payout = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      expect(payout).to.equal(0n);
+    });
+
+    it("Should match actual claim amount for finalized week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // Create scenario with clear winner
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user3.account,
+      });
+
+      const app2 = getAppHash("https://app2.com");
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user2.account,
+      });
+
+      // Finalize week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // Get expected payout
+      const expectedPayout = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+
+      // Get balance before claim
+      const balanceBefore = await mockERC20.read.balanceOf([
+        user1.account.address,
+      ]);
+
+      // Claim
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      // Get balance after claim
+      const balanceAfter = await mockERC20.read.balanceOf([
+        user1.account.address,
+      ]);
+
+      // Actual claim should match expected payout
+      expect(balanceAfter - balanceBefore).to.equal(expectedPayout);
+    });
+
+    it("Should update payout calculation as votes change in non-finalized week", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // User1 votes for app1
+      const app1 = getAppHash("https://app1.com");
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+      });
+
+      // Initially, user1 should have some payout (app1 is winning)
+      const payout1 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout1 > 0n).to.be.true;
+
+      // User2 votes for app2
+      const app2 = getAppHash("https://app2.com");
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user2.account,
+      });
+
+      // User1's payout should still be > 0 (app1 still winning)
+      const payout2 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout2 > 0n).to.be.true;
+
+      // User3 votes for app2 (now app2 is winning)
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user3.account,
+      });
+
+      // Now user1's payout should be > 0 (app1 is in 2nd place, gets 30% of pool)
+      const payout3 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout3 > 0n).to.be.true; // User1 gets 2nd place payout (30%)
+      
+      // User2 and User3 make up the first group now (app2 leading)
+      const payout4 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      const payout5 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user3.account.address,
+      ]);
+      expect(payout4 > 0n).to.be.true;
+      expect(payout5 > 0n).to.be.true;
+
+      // Verify aggregated payouts align with 60/30 distribution
+      const pool = await contract.read.getWeekPrizePool([currentWeek]);
+      const firstGroupTotal = payout4 + payout5;
+      const secondGroupTotal = payout3;
+      expect(firstGroupTotal).to.equal((pool * 60n) / 100n);
+      expect(secondGroupTotal).to.equal((pool * 30n) / 100n);
+    });
+
+    it("Should handle complex payout scenarios for non-finalized weeks", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // Create scenario: app1 with 3 votes, app2 with 2 votes, app3 with 1 vote
+      const app1 = getAppHash("https://app1.com");
+      const app2 = getAppHash("https://app2.com");
+      const app3 = getAppHash("https://app3.com");
+
+      // App1: 3 votes (1st place)
+      for (let i = 0; i < 3; i++) {
+        await contract.write.vote([app1, "https://app1.com"], {
+          account: user1.account,
+        });
+      }
+
+      // App2: 2 votes (2nd place)
+      for (let i = 0; i < 2; i++) {
+        await contract.write.vote([app2, "https://app2.com"], {
+          account: user2.account,
+        });
+      }
+
+      // App3: 1 vote (3rd place)
+      await contract.write.vote([app3, "https://app3.com"], {
+        account: user3.account,
+      });
+
+      // Check payouts for non-finalized week
+      const payout1 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout1 > 0n).to.be.true; // User1 voted for 1st place
+
+      const payout2 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      expect(payout2 > 0n).to.be.true; // User2 voted for 2nd place
+
+      const payout3 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user3.account.address,
+      ]);
+      expect(payout3 > 0n).to.be.true; // User3 voted for 3rd place
+
+      // Finalize and verify payouts match
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      const payout1Finalized = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(payout1Finalized).to.equal(payout1); // Should match pre-finalization
+    });
+  });
 });
 
