@@ -20,7 +20,7 @@ export const env = createEnv({
       .string()
       .url()
       .optional()
-      .default("https://forno.celo.org"),
+      .default("https://forno.celo-sepolia.celo-testnet.org"),
   },
   client: {
     NEXT_PUBLIC_URL: z.string().min(1).optional().default("http://localhost:3000"),
