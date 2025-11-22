@@ -1,41 +1,37 @@
-import { defineConfig } from "hardhat/config";
+import type { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox-viem";
 
-export default defineConfig({
+const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.28",
     settings: {
       optimizer: {
         enabled: true,
         runs: 200,
       },
-      viaIR: true,
     },
   },
   networks: {
     // Celo Mainnet
     celo: {
-      type: "http",
       url: "https://forno.celo.org",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 42220,
     },
     // Celo Alfajores Testnet
     alfajores: {
-      type: "http",
       url: "https://alfajores-forno.celo-testnet.org",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 44787,
     },
     // Celo Sepolia Testnet
     sepolia: {
-      type: "http",
       url: "https://forno.celo-sepolia.celo-testnet.org",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11142220,
     },
     // Local development
     localhost: {
-      type: "http",
       url: "http://127.0.0.1:8545",
       chainId: 31337,
     },
@@ -73,4 +69,10 @@ export default defineConfig({
       },
     ],
   },
-});
+  gasReporter: {
+    enabled: process.env.REPORT_GAS !== undefined,
+    currency: "USD",
+  },
+};
+
+export default config;
