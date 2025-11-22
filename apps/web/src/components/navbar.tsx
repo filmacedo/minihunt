@@ -1,98 +1,122 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { Menu, ExternalLink } from "lucide-react";
-
+import { Icons } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
-const navLinks = [
-  { name: "Home", href: "/" },
-  { name: "Docs", href: "https://docs.celo.org", external: true },
-];
+interface TopNavProps {
+  onOpenModal?: (modal: string) => void;
+}
 
-export function Navbar() {
+export function TopNav({ onOpenModal }: TopNavProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+  useEffect(() => {
+    // Initialize theme from html class or local storage
+    const isDark = document.documentElement.classList.contains("dark");
+    setTheme(isDark ? "dark" : "light");
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    if (newTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          {/* Mobile menu button */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80">
-              <div className="flex items-center gap-2 mb-8">
-                <span className="font-bold text-lg">MiniHunt</span>
-              </div>
-              <nav className="flex flex-col gap-4">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    target={link.external ? "_blank" : undefined}
-                    rel={link.external ? "noopener noreferrer" : undefined}
-                    className={`flex items-center gap-2 text-base font-medium transition-colors hover:text-primary ${
-                      pathname === link.href
-                        ? "text-foreground"
-                        : "text-foreground/70"
-                    }`}
-                  >
-                    {link.name}
-                    {link.external && <ExternalLink className="h-4 w-4" />}
-                  </Link>
-                ))}
-                <div className="mt-6 pt-6 border-t">
-                  <Button className="w-full">Connect Wallet</Button>
-                </div>
-              </nav>
-            </SheetContent>
-          </Sheet>
+    <>
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-background/80 backdrop-blur-md z-40">
+        <Link
+          href="/"
+          className="text-lg font-bold tracking-tight flex items-center gap-2"
+        >
+          <span>MiniHunt</span>
+        </Link>
+        <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
+          <Icons.Menu className="h-5 w-5" />
+        </Button>
+      </header>
 
-          {/* Logo */}
-          <Link
-            href="/"
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          >
-            <span className="hidden font-bold text-xl sm:inline-block">
-              MiniHunt
-            </span>
-          </Link>
-        </div>
-
-        {/* Desktop navigation */}
-        <nav className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent side="right">
+          <SheetHeader className="text-left">
+            <SheetTitle>Menu</SheetTitle>
+          </SheetHeader>
+          <nav className="flex flex-col gap-1 pt-8">
             <Link
-              key={link.href}
-              href={link.href}
-              target={link.external ? "_blank" : undefined}
-              rel={link.external ? "noopener noreferrer" : undefined}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary ${
-                pathname === link.href
-                  ? "text-foreground"
-                  : "text-foreground/70"
-              }`}
+              href="/"
+              className={cn(
+                "px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50",
+                pathname === "/" && "bg-muted"
+              )}
+              onClick={() => setIsOpen(false)}
             >
-              {link.name}
-              {link.external && <ExternalLink className="h-4 w-4" />}
+              Home
             </Link>
-          ))}
+            <Link
+              href="/my-bets"
+              className={cn(
+                "px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50",
+                pathname === "/my-bets" && "bg-muted"
+              )}
+              onClick={() => setIsOpen(false)}
+            >
+              My Bets
+            </Link>
 
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              Connect Wallet
-            </Button>
-          </div>
-        </nav>
-      </div>
-    </header>
+            {onOpenModal && (
+              <>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenModal("submit");
+                  }}
+                  className="px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50 text-left"
+                >
+                  Submit MiniApp
+                </button>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenModal("how-it-works");
+                  }}
+                  className="px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50 text-left"
+                >
+                  How It Works
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={toggleTheme}
+              className="px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50 text-left flex items-center justify-between"
+            >
+              <span>Theme</span>
+              <span className="text-xs text-muted-foreground">
+                {theme === "light" ? "Light" : "Dark"}
+              </span>
+            </button>
+          </nav>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
+
+// Backward compatibility for layout if needed temporarily, though we plan to remove it from layout
+export const Navbar = () => <TopNav />;
