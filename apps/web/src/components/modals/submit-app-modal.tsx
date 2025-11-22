@@ -5,12 +5,14 @@ import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther } from "viem";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
+import { parseUnits, formatUnits } from "viem";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
-import { type FarcasterManifest } from "@/lib/miniapp-utils";
+import { type FarcasterManifest, normalizeUrl } from "@/lib/miniapp-utils";
+import { calculateAppHash } from "@/lib/app-utils";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
+import ERC20_ABI from "@/lib/abis/erc20.json";
 import { cn } from "@/lib/utils";
 
 interface SubmitAppModalProps {
@@ -26,21 +28,131 @@ interface ValidationResult {
   error?: string;
 }
 
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`;
+const APPROVAL_AMOUNT = parseUnits("100", 6); // Approve 100 USDC for multiple votes
+
 export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalProps) {
   const [url, setUrl] = useState("");
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   
   const { context } = useMiniApp();
   const { post } = useApi();
+  const { address } = useAccount();
   
-  // Write Contract Hook
-  const { data: hash, isPending, writeContract } = useWriteContract();
-  
-  // Transaction Receipt Hook
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
+  // Read contract hooks - fetch USDC address, balance, allowance, decimals, initialPrice
+  const { data: usdcAddress } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: MINI_APP_WEEKLY_BETS_ABI,
+    functionName: "cUSD",
+    query: {
+      enabled: isOpen && !!CONTRACT_ADDRESS,
+    },
+  }) as { data: `0x${string}` | undefined };
+
+  const { data: tokenDecimals } = useReadContract({
+    address: usdcAddress,
+    abi: ERC20_ABI,
+    functionName: "decimals",
+    query: {
+      enabled: isOpen && !!usdcAddress,
+    },
+  }) as { data: number | undefined };
+
+  const { data: balance } = useReadContract({
+    address: usdcAddress,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: isOpen && !!usdcAddress && !!address,
+    },
+  }) as { data: bigint | undefined };
+
+  const { data: allowance } = useReadContract({
+    address: usdcAddress,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address && CONTRACT_ADDRESS ? [address, CONTRACT_ADDRESS] : undefined,
+    query: {
+      enabled: isOpen && !!usdcAddress && !!address && !!CONTRACT_ADDRESS,
+    },
+  }) as { data: bigint | undefined };
+
+  const { data: initialPrice } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: MINI_APP_WEEKLY_BETS_ABI,
+    functionName: "initialPrice",
+    query: {
+      enabled: isOpen && !!CONTRACT_ADDRESS,
+    },
+  }) as { data: bigint | undefined };
+
+  // Calculate if approval is needed
+  const needsApproval = initialPrice !== undefined && allowance !== undefined && allowance < initialPrice;
+
+  // Approval transaction hooks
+  const { 
+    data: approvalHash, 
+    isPending: isApproving, 
+    writeContract: writeApproval,
+    error: approvalError,
+  } = useWriteContract();
+
+  const { 
+    isLoading: isApprovalConfirming, 
+    isSuccess: isApprovalSuccess 
+  } = useWaitForTransactionReceipt({
+    hash: approvalHash,
   });
+
+  // Vote transaction hooks
+  const { 
+    data: voteHash, 
+    isPending: isVoting, 
+    writeContract: writeVote,
+    error: voteError,
+  } = useWriteContract();
+
+  const { 
+    isLoading: isVoteConfirming, 
+    isSuccess: isVoteSuccess 
+  } = useWaitForTransactionReceipt({
+    hash: voteHash,
+  });
+
+
+  // Handle approval success - proceed to vote
+  useEffect(() => {
+    if (isApprovalSuccess && needsApproval && url && validationResult?.manifest && usdcAddress) {
+      // Approval confirmed, now proceed with vote
+      const normalizedUrl = normalizeUrl(url);
+      const appHash = calculateAppHash(url);
+
+      // Save metadata (optimistic)
+      const frame = validationResult.manifest.frame || validationResult.manifest.miniapp;
+      if (frame) {
+        post("/api/miniapps", {
+          frameUrl: url,
+          frameSignature: appHash,
+          name: frame.name || null,
+          description: frame.description || frame.tagline || null,
+          iconUrl: frame.iconUrl || null,
+        }).catch((err) => {
+          console.warn("Metadata save failed", err);
+        });
+      }
+
+      // Submit to blockchain
+      writeVote({
+        address: CONTRACT_ADDRESS,
+        abi: MINI_APP_WEEKLY_BETS_ABI,
+        functionName: "vote",
+        args: [appHash as `0x${string}`, normalizedUrl],
+      });
+    }
+  }, [isApprovalSuccess, needsApproval, url, validationResult, usdcAddress, writeVote, post]);
 
   // Debounced validation effect
   useEffect(() => {
@@ -84,47 +196,87 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
     return () => clearTimeout(timeoutId);
   }, [url, post]);
 
-  const handleSubmit = async () => {
-    if (!url || !validationResult?.manifest) return;
+  const handleVote = async () => {
+    if (!url || !validationResult?.manifest || !usdcAddress) return;
     
     try {
-      const frame = validationResult.manifest.frame || validationResult.manifest.miniapp;
-      if (!frame) return;
+      setSubmissionError(null);
+      const normalizedUrl = normalizeUrl(url);
+      const appHash = calculateAppHash(url);
 
       // Step 1: Save metadata (optimistic)
       try {
-        await post("/api/miniapps", {
-          frameUrl: url,
-          frameSignature: url,
-          name: frame.name || null,
-          description: frame.description || frame.tagline || null,
-          iconUrl: frame.iconUrl || null,
-        });
+        const frame = validationResult.manifest.frame || validationResult.manifest.miniapp;
+        if (frame) {
+          await post("/api/miniapps", {
+            frameUrl: url,
+            frameSignature: appHash,
+            name: frame.name || null,
+            description: frame.description || frame.tagline || null,
+            iconUrl: frame.iconUrl || null,
+          });
+        }
       } catch (err) {
         console.warn("Metadata save failed", err);
       }
 
       // Step 2: Submit to blockchain
-      const amount = "1";
-
-      writeContract({
-        address: process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`,
+      writeVote({
+        address: CONTRACT_ADDRESS,
         abi: MINI_APP_WEEKLY_BETS_ABI,
-        functionName: 'vote',
-        args: [parseEther(amount), url],
-        value: parseEther(amount),
+        functionName: "vote",
+        args: [appHash, normalizedUrl],
+        // NO value parameter - contract uses ERC20 transfer
       });
-      
     } catch (error) {
-      console.error("Submission failed:", error);
+      console.error("Vote failed:", error);
+      setSubmissionError(error instanceof Error ? error.message : "Failed to submit vote");
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!url || !validationResult?.manifest || !usdcAddress || !address) return;
+    
+    setSubmissionError(null);
+
+    // Check balance
+    if (initialPrice !== undefined && balance !== undefined && balance < initialPrice) {
+      const balanceFormatted = tokenDecimals !== undefined
+        ? formatUnits(balance, tokenDecimals)
+        : balance.toString();
+      const requiredFormatted = tokenDecimals !== undefined
+        ? formatUnits(initialPrice, tokenDecimals)
+        : initialPrice.toString();
+      setSubmissionError(
+        `Insufficient USDC balance. You have ${balanceFormatted} USDC, but need ${requiredFormatted} USDC.`
+      );
+      return;
+    }
+
+    // Check allowance and approve if needed
+    if (needsApproval && initialPrice) {
+      try {
+        writeApproval({
+          address: usdcAddress,
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [CONTRACT_ADDRESS, APPROVAL_AMOUNT],
+        });
+      } catch (error) {
+        console.error("Approval failed:", error);
+        setSubmissionError(error instanceof Error ? error.message : "Failed to approve USDC");
+      }
+    } else {
+      // Already approved, proceed with vote
+      handleVote();
     }
   };
 
   // Effect to handle post-transaction API call
   useEffect(() => {
-    if (isSuccess && hash && context?.user?.fid) {
+    if (isVoteSuccess && voteHash && context?.user?.fid) {
       post("/api/miniapps/vote", {
-        tx_hash: hash,
+        tx_hash: voteHash,
         fid: context.user.fid
       }).then(() => {
         onSuccess();
@@ -133,7 +285,20 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
         onSuccess();
       });
     }
-  }, [isSuccess, hash, context, post, onSuccess]);
+  }, [isVoteSuccess, voteHash, context, post, onSuccess]);
+
+  // Update error state from transaction errors
+  useEffect(() => {
+    if (approvalError) {
+      setSubmissionError(approvalError.message || "Approval transaction failed");
+    }
+  }, [approvalError]);
+
+  useEffect(() => {
+    if (voteError) {
+      setSubmissionError(voteError.message || "Vote transaction failed");
+    }
+  }, [voteError]);
 
   if (!isOpen) return null;
 
@@ -142,12 +307,28 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const appDescription = frame?.description || frame?.tagline || "";
   const appIcon = frame?.iconUrl || null;
 
+  const isProcessing = isApproving || isApprovalConfirming || isVoting || isVoteConfirming;
+  const hasInsufficientBalance = initialPrice !== undefined && balance !== undefined && balance < initialPrice;
+
   const canSubmit = 
     !isValidating &&
     validationResult !== null &&
     validationResult.isValid === true &&
     validationResult.hasParticipatedBefore === false &&
-    url.length > 0;
+    url.length > 0 &&
+    !hasInsufficientBalance &&
+    !isProcessing;
+
+  // Format balance and allowance for display
+  const balanceFormatted = balance !== undefined && tokenDecimals !== undefined
+    ? formatUnits(balance, tokenDecimals)
+    : null;
+  const allowanceFormatted = allowance !== undefined && tokenDecimals !== undefined
+    ? formatUnits(allowance, tokenDecimals)
+    : null;
+  const initialPriceFormatted = initialPrice !== undefined && tokenDecimals !== undefined
+    ? formatUnits(initialPrice, tokenDecimals)
+    : null;
 
   return (
     <ModalWrapper onClose={onClose} title="Submit New App">
@@ -170,7 +351,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
                   ? "border-green-500/50 focus:ring-green-500/20"
                   : "border-input"
               )}
-              disabled={isPending || isConfirming}
+              disabled={isProcessing}
             />
             {isValidating && (
               <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -257,6 +438,28 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           </div>
         )}
 
+        {/* Balance and Allowance Status */}
+        {address && balanceFormatted !== null && (
+          <div className="bg-muted/30 rounded-lg border border-border p-3 space-y-1 text-sm">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">USDC Balance:</span>
+              <span className="font-mono text-foreground font-medium">{balanceFormatted} USDC</span>
+            </div>
+            {allowanceFormatted !== null && (
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Allowance:</span>
+                <span className="font-mono text-foreground font-medium">{allowanceFormatted} USDC</span>
+              </div>
+            )}
+            {initialPriceFormatted && (
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Required:</span>
+                <span className="font-mono text-foreground font-medium">{initialPriceFormatted} USDC</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Error Messages */}
         {validationResult?.error && validationResult.isValid === false && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-500">
@@ -270,20 +473,26 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           </div>
         )}
 
+        {submissionError && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-500">
+            {submissionError}
+          </div>
+        )}
+
         <Button
-          disabled={!canSubmit || isPending || isConfirming}
+          disabled={!canSubmit}
           onClick={handleSubmit}
           className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isPending ? (
+          {isApproving || isApprovalConfirming ? (
             <>
               <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
-              Check Wallet...
+              Approving USDC...
             </>
-          ) : isConfirming ? (
+          ) : isVoting || isVoteConfirming ? (
             <>
               <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
-              Confirming...
+              Submitting...
             </>
           ) : (
             "Submit for $1.00"
