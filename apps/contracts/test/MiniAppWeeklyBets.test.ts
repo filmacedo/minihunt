@@ -59,10 +59,11 @@ describe("MiniAppWeeklyBets", function () {
     // Set start time to a past time (allows immediate voting)
     const startTime = BigInt(await time.latest()) - WEEK_SECONDS;
 
-    // Deploy contract
+    // Deploy contract with initialPrice (1e18 for 18-decimal tokens in tests)
+    const initialPrice = INITIAL_PRICE; // Use INITIAL_PRICE constant for tests (1e18)
     contract = await viem.deployContract(
       "MiniAppWeeklyBets",
-      [mockERC20.address, protocolRecipient.account.address, startTime],
+      [mockERC20.address, protocolRecipient.account.address, startTime, initialPrice],
       {}
     );
 

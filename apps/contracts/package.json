@@ -12,6 +12,7 @@
     "deploy:sepolia": "hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network sepolia",
     "deploy:celo": "hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network celo",
     "deploy:script": "tsx scripts/deploy.ts",
+    "test-vote": "tsx scripts/test-vote.ts",
     "verify": "hardhat verify",
     "clean": "hardhat clean"
   },
