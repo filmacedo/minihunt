@@ -270,115 +270,89 @@ contract MiniAppWeeklyBets is Ownable {
         emit Claimed(weekIdx, msg.sender, payout);
     }
 
+    // Helper: calculate payout from a group of apps with a given percentage
+    function _calculateGroupPayout(
+        uint256 weekIdx,
+        address user,
+        bytes32[] storage group,
+        uint256 pool,
+        uint256 totalPct
+    ) internal view returns (uint256) {
+        if (group.length == 0) return 0;
+        uint256 perAppPct = totalPct / group.length;
+        uint256 payout = 0;
+        for (uint256 i = 0; i < group.length; i++) {
+            bytes32 app = group[i];
+            uint256 appVotes = weekAppInfo[weekIdx][app].votes;
+            if (appVotes == 0) continue;
+            uint256 userVotes = weekVotesByUser[weekIdx][app][user];
+            if (userVotes == 0) continue;
+            uint256 appBucket = (pool * perAppPct) / 100;
+            payout += (userVotes * appBucket) / appVotes;
+        }
+        return payout;
+    }
+
+    // Helper: calculate payout for single app
+    function _calculateSingleAppPayout(
+        uint256 weekIdx,
+        address user,
+        bytes32 app,
+        uint256 pool,
+        uint256 pct,
+        uint256 appVotes
+    ) internal view returns (uint256) {
+        uint256 userVotes = weekVotesByUser[weekIdx][app][user];
+        if (userVotes == 0 || appVotes == 0) return 0;
+        uint256 appBucket = (pool * pct) / 100;
+        return (userVotes * appBucket) / appVotes;
+    }
+
     // compute user's payout given stored winners in week
     function _computePayoutForUser(uint256 weekIdx, address user) internal view returns (uint256) {
         uint256 pool = weekPrizePool[weekIdx];
         if (pool == 0) return 0;
 
-        uint256 pctFirst = 60;
-        uint256 pctSecond = 30;
-        uint256 pctThird = 10;
-
-        uint256 payout = 0;
         bytes32[] storage firstGroup = weekFirstGroup[weekIdx];
         bytes32[] storage secondGroup = weekSecondGroup[weekIdx];
         bytes32[] storage thirdGroup = weekThirdGroup[weekIdx];
 
         // If firstGroup size >=3 -> split 100% equally among firstGroup apps
         if (firstGroup.length >= 3) {
-            uint256 eachPct = 100 / firstGroup.length;
-            for (uint256 i = 0; i < firstGroup.length; i++) {
-                bytes32 app = firstGroup[i];
-                uint256 appVotes = weekAppInfo[weekIdx][app].votes;
-                if (appVotes == 0) continue;
-                uint256 uv = weekVotesByUser[weekIdx][app][user];
-                if (uv == 0) continue;
-                uint256 appBucket = (pool * eachPct) / 100;
-                payout += (uv * appBucket) / appVotes;
-            }
-            return payout;
+            return _calculateGroupPayout(weekIdx, user, firstGroup, pool, 100);
         }
 
         // If two tie for first -> they share 90% equally
         if (firstGroup.length == 2) {
-            uint256 combinedPct = pctFirst + pctSecond; // 90
-            uint256 eachPct = combinedPct / 2;
-            for (uint256 i = 0; i < firstGroup.length; i++) {
-                bytes32 app = firstGroup[i];
-                uint256 appVotes = weekAppInfo[weekIdx][app].votes;
-                if (appVotes == 0) continue;
-                uint256 uv = weekVotesByUser[weekIdx][app][user];
-                if (uv == 0) continue;
-                uint256 appBucket = (pool * eachPct) / 100;
-                payout += (uv * appBucket) / appVotes;
-            }
+            uint256 firstPayout = _calculateGroupPayout(weekIdx, user, firstGroup, pool, 90);
             // third handling (if present)
             if (weekThirdVotes[weekIdx] > 0 && thirdGroup.length > 0) {
-                uint256 appPct = pctThird;
-                uint256 perAppPct = appPct / thirdGroup.length;
-                for (uint256 i = 0; i < thirdGroup.length; i++) {
-                    bytes32 app = thirdGroup[i];
-                    uint256 appVotes = weekAppInfo[weekIdx][app].votes;
-                    if (appVotes == 0) continue;
-                    uint256 uv = weekVotesByUser[weekIdx][app][user];
-                    if (uv == 0) continue;
-                    uint256 appBucket = (pool * perAppPct) / 100;
-                    payout += (uv * appBucket) / appVotes;
-                }
+                firstPayout += _calculateGroupPayout(weekIdx, user, thirdGroup, pool, 10);
             }
-            return payout;
+            return firstPayout;
         }
+
+        uint256 payout = 0;
 
         // Normal case: single firstGroup app (or empty)
         if (firstGroup.length == 1 && weekFirstVotes[weekIdx] > 0) {
-            bytes32 app = firstGroup[0];
-            uint256 appVotes = weekFirstVotes[weekIdx];
-            uint256 uv = weekVotesByUser[weekIdx][app][user];
-            if (uv > 0) {
-                uint256 appBucket = (pool * pctFirst) / 100;
-                payout += (uv * appBucket) / appVotes;
-            }
+            payout += _calculateSingleAppPayout(weekIdx, user, firstGroup[0], pool, 60, weekFirstVotes[weekIdx]);
         }
 
         // second group
         if (weekSecondVotes[weekIdx] > 0 && secondGroup.length > 0) {
             if (secondGroup.length > 1) {
                 // tie for second => they share 40% (30+10)
-                uint256 combinedPct = pctSecond + pctThird; // 40
-                uint256 perAppPct = combinedPct / secondGroup.length;
-                for (uint256 i = 0; i < secondGroup.length; i++) {
-                    bytes32 app = secondGroup[i];
-                    uint256 appVotes = weekAppInfo[weekIdx][app].votes;
-                    if (appVotes == 0) continue;
-                    uint256 uv = weekVotesByUser[weekIdx][app][user];
-                    if (uv == 0) continue;
-                    uint256 appBucket = (pool * perAppPct) / 100;
-                    payout += (uv * appBucket) / appVotes;
-                }
+                payout += _calculateGroupPayout(weekIdx, user, secondGroup, pool, 40);
             } else {
                 // single second app => 30%
-                bytes32 app = secondGroup[0];
-                uint256 appVotes = weekSecondVotes[weekIdx];
-                uint256 uv = weekVotesByUser[weekIdx][app][user];
-                if (uv > 0) {
-                    uint256 appBucket = (pool * pctSecond) / 100;
-                    payout += (uv * appBucket) / appVotes;
-                }
+                payout += _calculateSingleAppPayout(weekIdx, user, secondGroup[0], pool, 30, weekSecondVotes[weekIdx]);
             }
         }
 
         // third group only if not already included
-        if (weekThirdVotes[weekIdx] > 0 && thirdGroup.length > 0) {
-            uint256 perAppPct = pctThird / thirdGroup.length;
-            for (uint256 i = 0; i < thirdGroup.length; i++) {
-                bytes32 app = thirdGroup[i];
-                uint256 appVotes = weekAppInfo[weekIdx][app].votes;
-                if (appVotes == 0) continue;
-                uint256 uv = weekVotesByUser[weekIdx][app][user];
-                if (uv == 0) continue;
-                uint256 appBucket = (pool * perAppPct) / 100;
-                payout += (uv * appBucket) / appVotes;
-            }
+        if (weekThirdVotes[weekIdx] > 0 && thirdGroup.length > 0 && firstGroup.length != 2) {
+            payout += _calculateGroupPayout(weekIdx, user, thirdGroup, pool, 10);
         }
 
         return payout;
