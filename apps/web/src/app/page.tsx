@@ -9,11 +9,10 @@ import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useVotersLeaderboard } from "@/hooks/use-voters-leaderboard";
 import { MiniApp } from "@/lib/types";
-import { formatEther } from "viem";
+import { formatUnits } from "viem";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { sdk as miniappSdk } from "@farcaster/miniapp-sdk";
 
 export default function Home() {
   const { leaderboard: apps, week: appsWeek, isLoading: appsLoading, refetch: refetchApps } = useLeaderboard();
@@ -45,23 +44,6 @@ export default function Home() {
     refetchApps();
     // Add toast notification here later
     handleCloseModal();
-  };
-
-  const handleViewProfile = async (fid: string) => {
-    try {
-      const fidNumber = parseInt(fid, 10);
-      if (isNaN(fidNumber)) {
-        console.error("Invalid FID:", fid);
-        return;
-      }
-      // Use @farcaster/miniapp-sdk for viewProfile action
-      const data = await miniappSdk.actions.viewProfile({ fid: 2 });
-      console.log("Profile data:", data);
-      // Open profile in new tab
-      return data;
-    } catch (error) {
-      console.error("Error viewing profile:", error);
-    }
   };
 
   return (
@@ -172,10 +154,9 @@ export default function Home() {
               <div className="text-center py-10 text-muted-foreground">No votes cast yet this week.</div>
             ) : (
               voters.map((voter, i) => (
-                <button
+                <div
                   key={voter.fid}
-                  onClick={() => handleViewProfile(voter.fid)}
-                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px] w-full text-left hover:bg-muted/50 active:bg-muted transition-colors cursor-pointer"
+                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px] w-full"
                 >
                   <div className="flex-none w-8 text-center">
                     <span className="text-sm font-bold text-muted-foreground font-mono">
@@ -184,29 +165,37 @@ export default function Home() {
                   </div>
 
                   <Avatar className="flex-none w-12 h-12">
+                    <AvatarImage
+                      src={voter.user?.profile_image_url || undefined}
+                      alt={voter.user?.name || `FID ${voter.fid}`}
+                    />
                     <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
-                      {voter.fid.toString().substring(0, 2)}
+                      {voter.user?.name
+                        ? voter.user.name.substring(0, 2).toUpperCase()
+                        : voter.fid.toString().substring(0, 2)}
                     </AvatarFallback>
                   </Avatar>
 
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-foreground truncate text-base">
-                      FID: {voter.fid}
+                      {voter.user?.name || `FID: ${voter.fid}`}
                     </h3>
-                    <p className="text-sm text-muted-foreground">
-                       <span className="font-mono">{formatEther(BigInt(voter.paidAmount))}</span> CELO spent
+                    <p className="text-sm text-muted-foreground truncate">
+                      {voter.user?.bio || (
+                        <span className="font-mono">{formatUnits(BigInt(voter.paidAmount), 6)} USDC spent</span>
+                      )}
                     </p>
                   </div>
 
                   <div className="flex-none text-right">
                     <div className="text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
-                      {BigInt(voter.earningAmount) > 0n ? `+${formatEther(BigInt(voter.earningAmount))}` : "-"}
+                      {BigInt(voter.earningAmount) > 0n ? `+${formatUnits(BigInt(voter.earningAmount), 6)}` : "-"}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       Est. win
                     </div>
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
