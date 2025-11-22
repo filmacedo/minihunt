@@ -1,0 +1,46 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.fid_week_earnings (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  fid numeric NOT NULL,
+  week_id bigint,
+  paid_amount numeric DEFAULT '0'::numeric,
+  earning_amount numeric DEFAULT '0'::numeric,
+  CONSTRAINT fid_week_earnings_pkey PRIMARY KEY (id),
+  CONSTRAINT fid_week_earnings_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id)
+);
+CREATE TABLE public.mini_apps (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  frame_url character varying NOT NULL UNIQUE,
+  frame_signature character varying NOT NULL UNIQUE,
+  name text,
+  description text,
+  icon_url character varying,
+  image_url character varying,
+  CONSTRAINT mini_apps_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.week_votes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  mini_app_id bigint NOT NULL,
+  fid numeric NOT NULL,
+  week_id bigint NOT NULL,
+  transaction_hash character varying NOT NULL,
+  paid_amount numeric,
+  CONSTRAINT week_votes_pkey PRIMARY KEY (id),
+  CONSTRAINT week_votes_mini_app_id_fkey FOREIGN KEY (mini_app_id) REFERENCES public.mini_apps(id),
+  CONSTRAINT week_votes_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id)
+);
+CREATE TABLE public.weeks (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  start_time timestamp with time zone NOT NULL UNIQUE,
+  total_voters numeric DEFAULT '0'::numeric,
+  total_unique_voters numeric DEFAULT '0'::numeric,
+  prize_pool numeric DEFAULT '0'::numeric,
+  end_time timestamp without time zone NOT NULL UNIQUE,
+  CONSTRAINT weeks_pkey PRIMARY KEY (id)
+);
