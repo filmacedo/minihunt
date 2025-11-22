@@ -13,8 +13,8 @@ node_modules
 /coverage
 /coverage.json
 
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
+# Hardhat Ignition deployment state (regenerated on each deployment)
+ignition/deployments/
 
-# Deployment addresses (uncomment if you don't want to commit deployment addresses)
-# deployments/
+# Deployment addresses (regenerated on each deployment)
+deployments/

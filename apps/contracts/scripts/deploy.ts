@@ -12,6 +12,7 @@
 import { execSync } from "child_process";
 import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { privateKeyToAccount } from "viem/accounts";
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -22,15 +23,15 @@ import { join } from "path";
  * 
  * Options:
  * - Set to a specific Unix timestamp (e.g., 1704067200 for a specific date)
- * - Set to null to use automatic next Monday calculation
+ * - Set to null to use automatic previous Saturday calculation
  * - Set to a future timestamp to schedule the contract start
  * 
  * Example values:
- * - null: Automatically calculate next Monday 00:00 UTC
+ * - null: Automatically calculate previous Saturday 00:00 UTC
  * - 1704067200: Specific date (2024-01-01 00:00:00 UTC)
  * - Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60: 7 days from now
  */
-const DEFAULT_START_TIME: number | null = null; // null = auto-calculate next Monday
+const DEFAULT_START_TIME: number | null = null; // null = auto-calculate previous Saturday
 
 // ============================================================================
 // Network configurations
@@ -45,7 +46,7 @@ const NETWORKS = {
   sepolia: {
     name: "sepolia",
     chainId: 11142220,
-    cUSD: process.env.SEPOLIA_CUSD_ADDRESS || "0x0000000000000000000000000000000000000000", // Update with actual address
+    cUSD: process.env.SEPOLIA_CUSD_ADDRESS || "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
     explorer: "https://celo-sepolia.blockscout.com",
   },
   localhost: {
@@ -59,30 +60,39 @@ const NETWORKS = {
 type NetworkName = keyof typeof NETWORKS;
 
 /**
- * Calculate the next Monday 00:00 UTC from now
+ * Ensure an address has the 0x prefix
  */
-function getNextMonday(): number {
+function ensure0xPrefix(address: string): string {
+  if (!address) return address;
+  return address.startsWith("0x") ? address : `0x${address}`;
+}
+
+/**
+ * Calculate the previous Saturday 00:00 UTC from now
+ */
+function getPreviousSaturday(): number {
   const now = new Date();
   const utcNow = new Date(now.getTime() + now.getTimezoneOffset() * 60 * 1000);
-  const dayOfWeek = utcNow.getUTCDay(); // 0 = Sunday, 1 = Monday, etc.
+  const dayOfWeek = utcNow.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   
-  // Calculate days until next Monday
-  let daysUntilMonday = (8 - dayOfWeek) % 7;
-  if (daysUntilMonday === 0) {
-    // If it's Monday, check if we're past 00:00 UTC
-    if (utcNow.getUTCHours() === 0 && utcNow.getUTCMinutes() === 0 && utcNow.getUTCSeconds() === 0) {
-      daysUntilMonday = 0; // Use current Monday
-    } else {
-      daysUntilMonday = 7; // Use next Monday
-    }
+  // Calculate days back to previous Saturday
+  // Saturday is day 6
+  let daysBackToSaturday: number;
+  if (dayOfWeek === 6) {
+    // If it's Saturday, use today at 00:00 UTC (the most recent Saturday)
+    daysBackToSaturday = 0;
+  } else {
+    // For other days: go back (dayOfWeek + 1) days to reach the previous Saturday
+    // Sunday (0) -> back 1 day, Monday (1) -> back 2 days, ..., Friday (5) -> back 6 days
+    daysBackToSaturday = dayOfWeek + 1;
   }
   
-  // Set to next Monday 00:00 UTC
-  const nextMonday = new Date(utcNow);
-  nextMonday.setUTCDate(utcNow.getUTCDate() + daysUntilMonday);
-  nextMonday.setUTCHours(0, 0, 0, 0);
+  // Set to previous Saturday 00:00 UTC
+  const previousSaturday = new Date(utcNow);
+  previousSaturday.setUTCDate(utcNow.getUTCDate() - daysBackToSaturday);
+  previousSaturday.setUTCHours(0, 0, 0, 0);
   
-  return Math.floor(nextMonday.getTime() / 1000);
+  return Math.floor(previousSaturday.getTime() / 1000);
 }
 
 /**
@@ -135,7 +145,7 @@ Options:
   --network, -n <name>          Network to deploy to (celo, sepolia, localhost) [default: sepolia]
   --cUSD, -c <address>          cUSD token address (optional, uses network default if not provided)
   --protocolRecipient, -p <addr> Protocol fee recipient address (optional, uses deployer if not provided)
-  --startTime, -s <timestamp>   Start time (Unix timestamp) (optional, uses DEFAULT_START_TIME constant or calculates next Monday)
+  --startTime, -s <timestamp>   Start time (Unix timestamp) (optional, uses DEFAULT_START_TIME constant or calculates previous Saturday)
   --reset, -r                   Reset deployment state before deploying
   --help, -h                    Show this help message
 
@@ -146,7 +156,7 @@ Environment Variables:
 Configuration:
   DEFAULT_START_TIME            Configurable constant in the script (line 33)
                                 - Set to a Unix timestamp for a fixed start time
-                                - Set to null to auto-calculate next Monday 00:00 UTC
+                                - Set to null to auto-calculate previous Saturday 00:00 UTC
 
 Examples:
   npm run deploy:script -- --network sepolia
@@ -232,44 +242,87 @@ async function deploy() {
       process.exit(1);
     }
 
-    const networkConfig = NETWORKS[network];
-    const cUSD = args.cUSD || networkConfig.cUSD;
-    const protocolRecipient = args.protocolRecipient || ""; // Empty means use deployer (handled by ignition)
+    // Log private key info (masked for security)
+    const privateKeyRaw = process.env.PRIVATE_KEY;
+    const privateKeyHas0x = privateKeyRaw.startsWith("0x");
+    console.log("\n🔍 Debug Information:");
+    console.log(`   PRIVATE_KEY length: ${privateKeyRaw.length}`);
+    console.log(`   PRIVATE_KEY has 0x prefix: ${privateKeyHas0x}`);
+    console.log(`   PRIVATE_KEY first 10 chars: ${privateKeyRaw.substring(0, 10)}...`);
+
+    // Derive deployer address from private key
+    const privateKey = privateKeyRaw.startsWith("0x") 
+      ? privateKeyRaw as `0x${string}`
+      : `0x${privateKeyRaw}` as `0x${string}`;
+    console.log(`   Formatted PRIVATE_KEY length: ${privateKey.length}`);
+    console.log(`   Formatted PRIVATE_KEY first 10 chars: ${privateKey.substring(0, 10)}...`);
     
-    // Determine start time: command line arg > constant > auto-calculate next Monday
+    const account = privateKeyToAccount(privateKey);
+    const deployerAddress = account.address;
+    console.log(`   Derived deployer address: ${deployerAddress}`);
+    console.log(`   Deployer address has 0x: ${deployerAddress.startsWith("0x")}`);
+
+    const networkConfig = NETWORKS[network];
+    // Ensure all addresses have 0x prefix
+    const cUSDRaw = args.cUSD || networkConfig.cUSD;
+    const cUSD = ensure0xPrefix(cUSDRaw);
+    const protocolRecipientRaw = args.protocolRecipient || deployerAddress;
+    const protocolRecipient = ensure0xPrefix(protocolRecipientRaw);
+    
+    console.log(`   cUSD (raw): ${cUSDRaw}`);
+    console.log(`   cUSD (normalized): ${cUSD}`);
+    console.log(`   Protocol Recipient (raw): ${protocolRecipientRaw}`);
+    console.log(`   Protocol Recipient (normalized): ${protocolRecipient}`);
+    
+    // Determine start time: command line arg > constant > auto-calculate previous Saturday
     let startTime: number;
     if (args.startTime) {
       startTime = args.startTime;
     } else if (DEFAULT_START_TIME !== null) {
       startTime = DEFAULT_START_TIME;
     } else {
-      startTime = getNextMonday();
+      startTime = getPreviousSaturday();
     }
 
     console.log("\n🚀 Starting deployment...");
     console.log(`   Network: ${network} (Chain ID: ${networkConfig.chainId})`);
+    console.log(`   Deployer Address: ${deployerAddress}`);
     console.log(`   cUSD Address: ${cUSD}`);
-    console.log(`   Protocol Recipient: ${protocolRecipient || "Deployer address"}`);
+    console.log(`   Protocol Recipient: ${protocolRecipient}`);
     console.log(`   Start Time: ${startTime} (${new Date(startTime * 1000).toISOString()})`);
 
     // Build command for Hardhat Ignition
-    let command = `hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network ${network}`;
+    let baseCommand = `hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network ${network}`;
     
-    // Add parameters
-    command += ` --parameters '{"MiniAppWeeklyBetsModule":{"cUSD":"${cUSD}","startTime":${startTime}`;
-    if (protocolRecipient) {
-      command += `,"protocolRecipient":"${protocolRecipient}"`;
-    }
-    command += `}}'`;
+    // Add parameters (always include protocolRecipient to avoid m.getAccount(0) issue)
+    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"cUSD":"${cUSD}","protocolRecipient":"${protocolRecipient}","startTime":${startTime}}}'`;
 
     // Reset deployment if requested
     if (args.reset) {
-      command += " --reset";
+      baseCommand += " --reset";
       console.log("   🔄 Reset flag enabled - will reset previous deployment state");
     }
+    
+    // Pipe 'y' to auto-confirm the deployment prompt
+    const command = `echo "y" | ${baseCommand}`;
 
     console.log("\n📝 Executing deployment command...");
-    console.log(`   ${command.replace(process.env.PRIVATE_KEY || "", "[PRIVATE_KEY]")}\n`);
+    const maskedCommand = baseCommand.replace(process.env.PRIVATE_KEY || "", "[PRIVATE_KEY]");
+    console.log(`   ${maskedCommand}\n`);
+    console.log("   (Auto-confirming deployment prompt)\n");
+    console.log("🔍 Full command details:");
+    console.log(`   - Network: ${network}`);
+    console.log(`   - Parameters JSON: ${JSON.stringify({
+      MiniAppWeeklyBetsModule: {
+        cUSD,
+        protocolRecipient,
+        startTime
+      }
+    }, null, 2)}`);
+    console.log(`   - cUSD address format: ${cUSD.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
+    console.log(`   - Protocol recipient format: ${protocolRecipient.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
+    console.log(`   - Deployer address format: ${deployerAddress.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
+    console.log("");
 
     // Execute the deployment
     // We use pipe to capture output, but will also log it
@@ -277,10 +330,12 @@ async function deploy() {
     let contractAddress: string | null = null;
 
     try {
+      // Execute with shell to handle the pipe properly
       output = execSync(command, {
         encoding: "utf-8",
         stdio: "pipe",
         cwd: process.cwd(),
+        shell: "/bin/bash",
       });
       
       // Log the output so user can see it
