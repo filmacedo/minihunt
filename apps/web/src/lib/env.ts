@@ -5,6 +5,8 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     JWT_SECRET: z.string().min(1).optional().default("build-time-placeholder"),
+    // NEYNAR_API_KEY is optional - can be undefined, empty string, or a valid API key
+    NEYNAR_API_KEY: z.string().optional(),
   },
   client: {
     NEXT_PUBLIC_URL: z.string().min(1).optional().default("http://localhost:3000"),
