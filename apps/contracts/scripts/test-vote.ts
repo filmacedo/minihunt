@@ -26,9 +26,9 @@ const MINI_APP_WEEKLY_BETS_ABI = JSON.parse(readFileSync(abiPath, "utf-8")) as A
 
 // Configuration
 const CELO_SEPOLIA_RPC = process.env.CELO_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
-const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS || "0x2b50Ae04F0B37e7a7Eb95aB5A2C75da8aADfe198") as Address;
+const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS || "0x272ab20E6AF4FbF2b87B93d842288f8Bd5756f2c") as Address;
 const CUSD_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address;
-const MINI_APP_URL = "https://base.builderscore.xyz/";
+const MINI_APP_URL = "https://celo.builderscore.xyz/";
 const FID = 253890;
 const API_URL = process.env.API_URL || "http://localhost:3000";
 
