@@ -1,7 +1,7 @@
 {
-  "name": "farcaster-miniapp",
+  "name": "MiniHunt",
   "version": "0.1.0",
-  "description": "MiniHunt. Bet on the best miniapps.",
+  "description": "Bet on the best miniapps.",
   "private": true,
   "scripts": {
     "build": "turbo build",

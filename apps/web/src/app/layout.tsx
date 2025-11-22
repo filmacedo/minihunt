@@ -1,11 +1,11 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-import { Navbar } from '@/components/navbar';
-import Providers from "@/components/providers"
+import { Navbar } from "@/components/navbar";
+import Providers from "@/components/providers";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 const appUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
 
@@ -26,11 +26,11 @@ const frame = {
 };
 
 export const metadata: Metadata = {
-  title: 'farcaster-miniapp',
-  description: 'MiniHunt. Bet on the best miniapps.',
+  title: "MiniHunt",
+  description: "Bet on the best miniapps.",
   openGraph: {
-    title: 'farcaster-miniapp',
-    description: 'MiniHunt. Bet on the best miniapps.',
+    title: "MiniHunt",
+    description: "Bet on the best miniapps.",
     images: [`${appUrl}/opengraph-image.png`],
   },
   other: {
@@ -50,9 +50,7 @@ export default function RootLayout({
         <div className="relative flex min-h-screen flex-col">
           <Providers>
             <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
+            <main className="flex-1">{children}</main>
           </Providers>
         </div>
       </body>
