@@ -1,4 +1,5 @@
 import { defineConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-viem";
 
 export default defineConfig({
   solidity: {
@@ -9,6 +10,9 @@ export default defineConfig({
         runs: 200,
       },
     },
+  },
+  mocha: {
+    timeout: 40000,
   },
   networks: {
     // Celo Mainnet
