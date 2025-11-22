@@ -15,6 +15,11 @@
         "internalType": "uint256",
         "name": "_startTime",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_initialPrice",
+        "type": "uint256"
       }
     ],
     "stateMutability": "nonpayable",
@@ -148,6 +153,25 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldPrice",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "InitialPriceChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "previousOwner",
@@ -260,19 +284,6 @@
   {
     "inputs": [],
     "name": "CLAIM_DEADLINE",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "INITIAL_PRICE",
     "outputs": [
       {
         "internalType": "uint256",
@@ -667,6 +678,19 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "initialPrice",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -714,6 +738,19 @@
   {
     "inputs": [],
     "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_newPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "setInitialPrice",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -27,10 +27,18 @@ const MiniAppWeeklyBetsModule = buildModule("MiniAppWeeklyBetsModule", (m: any) 
     Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60 // Default: 7 days ago (fallback only)
   );
 
+  // Default initialPrice: 1e6 (1 USDC with 6 decimals)
+  // Can be overridden to match token decimals if different
+  const initialPrice = m.getParameter(
+    "initialPrice",
+    BigInt("1000000") // Default: 1e6 (1 USDC with 6 decimals)
+  );
+
   const miniAppWeeklyBets = m.contract("MiniAppWeeklyBets", [
     cUSD,
     protocolRecipient,
     startTime,
+    initialPrice,
   ]);
 
   return { miniAppWeeklyBets };

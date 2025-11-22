@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { createMiniApp } from "@/lib/repositories/miniapps";
 import { findOrCreateWeekByTimestamp } from "@/lib/repositories/weeks";
+import { fetchFarcasterManifest } from "@/lib/miniapp-utils";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -173,14 +174,42 @@ export async function POST(request: Request) {
       if (existingApp) {
         miniApp = existingApp as { id: string; frame_url: string; frame_signature: string };
       } else {
-        // Create new mini_app
+        // Fetch metadata from farcaster.json manifest
+        let name: string | null = null;
+        let description: string | null = null;
+        let iconUrl: string | null = null;
+        let imageUrl: string | null = null;
+
+        try {
+          const manifest = await fetchFarcasterManifest(fullUrl);
+          if (manifest) {
+            const frame = manifest.frame || manifest.miniapp;
+            if (frame) {
+              name = typeof frame.name === "string" ? frame.name : null;
+              description = typeof frame.description === "string" ? frame.description : 
+                           (typeof frame.tagline === "string" ? frame.tagline : null);
+              iconUrl = typeof frame.iconUrl === "string" ? frame.iconUrl : null;
+              // Try multiple image fields in order of preference
+              imageUrl = (typeof frame.heroImageUrl === "string" ? frame.heroImageUrl : null) ||
+                        (typeof frame.splashImageUrl === "string" ? frame.splashImageUrl : null) ||
+                        (typeof frame.ogImageUrl === "string" ? frame.ogImageUrl : null) ||
+                        (typeof frame.imageUrl === "string" ? frame.imageUrl : null) ||
+                        null;
+            }
+          }
+        } catch (error) {
+          // Log but don't fail - we'll create the mini app with null metadata
+          console.warn(`Failed to fetch metadata for ${fullUrl}:`, error instanceof Error ? error.message : "Unknown error");
+        }
+
+        // Create new mini_app with fetched metadata
         miniApp = await createMiniApp({
           frame_url: fullUrl,
           frame_signature: appHashHex,
-          name: null,
-          description: null,
-          icon_url: null,
-          image_url: null,
+          name,
+          description,
+          icon_url: iconUrl,
+          image_url: imageUrl,
         });
       }
     } catch (error) {

@@ -103,6 +103,7 @@ function parseArgs(): {
   cUSD?: string;
   protocolRecipient?: string;
   startTime?: number;
+  initialPrice?: string;
   reset?: boolean;
 } {
   const args = process.argv.slice(2);
@@ -128,6 +129,10 @@ function parseArgs(): {
       case "--startTime":
       case "-s":
         result.startTime = parseInt(args[++i], 10);
+        break;
+      case "--initialPrice":
+      case "-i":
+        result.initialPrice = args[++i];
         break;
       case "--reset":
       case "-r":
@@ -181,6 +186,7 @@ function saveDeploymentInfo(
     cUSD: string;
     protocolRecipient: string;
     startTime: number;
+    initialPrice: string;
   }
 ) {
   const deploymentsDir = join(process.cwd(), "deployments");
@@ -209,6 +215,7 @@ function saveDeploymentInfo(
       protocolRecipient: params.protocolRecipient,
       startTime: params.startTime,
       startTimeReadable: new Date(params.startTime * 1000).toISOString(),
+      initialPrice: params.initialPrice,
     },
     explorer: `${NETWORKS[network].explorer}/address/${contractAddress}`,
   };
@@ -284,18 +291,22 @@ async function deploy() {
       startTime = getPreviousSaturday();
     }
 
+    // Determine initial price: command line arg > default (1e6 for 6-decimal tokens)
+    const initialPrice = args.initialPrice || "1000000"; // Default: 1e6 (1 USDC with 6 decimals)
+
     console.log("\n🚀 Starting deployment...");
     console.log(`   Network: ${network} (Chain ID: ${networkConfig.chainId})`);
     console.log(`   Deployer Address: ${deployerAddress}`);
     console.log(`   cUSD Address: ${cUSD}`);
     console.log(`   Protocol Recipient: ${protocolRecipient}`);
     console.log(`   Start Time: ${startTime} (${new Date(startTime * 1000).toISOString()})`);
+    console.log(`   Initial Price: ${initialPrice}`);
 
     // Build command for Hardhat Ignition
     let baseCommand = `hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network ${network}`;
     
     // Add parameters (always include protocolRecipient to avoid m.getAccount(0) issue)
-    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"cUSD":"${cUSD}","protocolRecipient":"${protocolRecipient}","startTime":${startTime}}}'`;
+    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"cUSD":"${cUSD}","protocolRecipient":"${protocolRecipient}","startTime":${startTime},"initialPrice":${initialPrice}}}'`;
 
     // Reset deployment if requested
     if (args.reset) {
@@ -316,7 +327,8 @@ async function deploy() {
       MiniAppWeeklyBetsModule: {
         cUSD,
         protocolRecipient,
-        startTime
+        startTime,
+        initialPrice
       }
     }, null, 2)}`);
     console.log(`   - cUSD address format: ${cUSD.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
@@ -435,12 +447,13 @@ async function deploy() {
         cUSD,
         protocolRecipient: protocolRecipient || "deployer",
         startTime,
+        initialPrice,
       });
 
       console.log(`\n💡 To verify the contract, run:`);
       const verifyParams = protocolRecipient
-        ? `${cUSD} ${protocolRecipient} ${startTime}`
-        : `${cUSD} <deployer_address> ${startTime}`;
+        ? `${cUSD} ${protocolRecipient} ${startTime} ${initialPrice}`
+        : `${cUSD} <deployer_address> ${startTime} ${initialPrice}`;
       console.log(
         `   npx hardhat verify --network ${network} ${contractAddress} ${verifyParams}`
       );

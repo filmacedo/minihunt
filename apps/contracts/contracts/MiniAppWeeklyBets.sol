@@ -19,7 +19,6 @@ contract MiniAppWeeklyBets is Ownable {
 
     /* ========== CONSTANTS ========== */
     uint256 public constant WEEK_SECONDS = 7 days;
-    uint256 public constant INITIAL_PRICE = 1e18; // 1 cUSD (18 decimals)
     uint256 public constant PRICE_NUM = 103;      // 3% growth multiplier numerator
     uint256 public constant PRICE_DEN = 100;      // denominator
     uint256 public constant PROTOCOL_FEE_NUM = 10; // 10%
@@ -34,6 +33,7 @@ contract MiniAppWeeklyBets is Ownable {
     address public protocolRecipient;
     uint256 public currentWeek; // active week for voting
     uint256 public totalPrizePools; // cumulative total of all prize pools ever stored (never decreases)
+    uint256 public initialPrice; // initial price for voting (updatable by owner, no decimals assumption)
 
     // global registry of apps (persist across weeks)
     mapping(bytes32 => bool) public appRegistered;
@@ -41,7 +41,7 @@ contract MiniAppWeeklyBets is Ownable {
     // per-week data
     struct AppWeekInfo {
         uint256 votes;
-        uint256 price; // price for next vote inside this week (0 means not initialized -> treat as INITIAL_PRICE)
+        uint256 price; // price for next vote inside this week (0 means not initialized -> treat as initialPrice)
         bool existsInWeek;
     }
 
@@ -71,6 +71,7 @@ contract MiniAppWeeklyBets is Ownable {
     event Claimed(uint256 indexed week, address indexed claimer, uint256 amount);
     event SweepToProtocol(uint256 indexed week, uint256 amount);
     event ProtocolRecipientChanged(address indexed newRecipient);
+    event InitialPriceChanged(uint256 oldPrice, uint256 newPrice);
 
     /* ========== ERRORS ========== */
     error NotEnoughPayment();
@@ -85,15 +86,18 @@ contract MiniAppWeeklyBets is Ownable {
     constructor(
         address _cUSD,
         address _protocolRecipient,
-        uint256 _startTime
+        uint256 _startTime,
+        uint256 _initialPrice
     ) Ownable(msg.sender) {
         require(_cUSD != address(0), "cUSD zero");
         require(_protocolRecipient != address(0), "protocol zero");
         require(_startTime > 0, "startTime zero");
+        require(_initialPrice > 0, "initialPrice zero");
 
         cUSD = IERC20(_cUSD);
         protocolRecipient = _protocolRecipient;
         startTime = _startTime;
+        initialPrice = _initialPrice;
         // set currentWeek to the week corresponding to now (allows immediate voting)
         currentWeek = getWeekIndex(block.timestamp);
     }
@@ -103,6 +107,17 @@ contract MiniAppWeeklyBets is Ownable {
         require(_recipient != address(0), "zero");
         protocolRecipient = _recipient;
         emit ProtocolRecipientChanged(_recipient);
+    }
+
+    /**
+     * @notice Update the initial price for voting. Can be called by owner.
+     * @param _newPrice The new initial price (in token's native units, no decimals assumption)
+     */
+    function setInitialPrice(uint256 _newPrice) external onlyOwner {
+        require(_newPrice > 0, "price zero");
+        uint256 oldPrice = initialPrice;
+        initialPrice = _newPrice;
+        emit InitialPriceChanged(oldPrice, _newPrice);
     }
 
     /* ========== VOTING ========== */
@@ -119,12 +134,12 @@ contract MiniAppWeeklyBets is Ownable {
         bool newAppThisWeek = false;
         if (!ai.existsInWeek) {
             ai.existsInWeek = true;
-            ai.price = INITIAL_PRICE;
+            ai.price = initialPrice;
             weekApps[currentWeek].push(appHash);
             newAppThisWeek = true;
         }
 
-        uint256 cost = ai.price == 0 ? INITIAL_PRICE : ai.price;
+        uint256 cost = ai.price == 0 ? initialPrice : ai.price;
 
         // transfer cUSD from user (user must approve first)
         cUSD.safeTransferFrom(msg.sender, address(this), cost);
@@ -150,7 +165,7 @@ contract MiniAppWeeklyBets is Ownable {
         // increment votes & update price for next vote
         ai.votes += 1;
         // price growth: multiply by 103/100
-        ai.price = ((ai.price == 0 ? INITIAL_PRICE : ai.price) * PRICE_NUM) / PRICE_DEN;
+        ai.price = ((ai.price == 0 ? initialPrice : ai.price) * PRICE_NUM) / PRICE_DEN;
 
         // record per-user votes
         weekVotesByUser[currentWeek][appHash][msg.sender] += 1;
