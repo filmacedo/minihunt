@@ -1,6 +1,8 @@
 import { defineConfig } from "hardhat/config";
+import hardhatToolboxViem from "@nomicfoundation/hardhat-toolbox-viem";
 
 export default defineConfig({
+  plugins: [hardhatToolboxViem],
   solidity: {
     version: "0.8.20",
     settings: {
@@ -9,6 +11,9 @@ export default defineConfig({
         runs: 200,
       },
     },
+  },
+  mocha: {
+    timeout: 40000,
   },
   networks: {
     // Celo Mainnet

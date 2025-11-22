@@ -416,5 +416,22 @@ contract MiniAppWeeklyBets is Ownable {
     ) {
         return (weekFirstGroup[weekIdx], weekSecondGroup[weekIdx], weekThirdGroup[weekIdx], weekFirstVotes[weekIdx], weekSecondVotes[weekIdx], weekThirdVotes[weekIdx]);
     }
+
+    // View functions for testing
+    function getWeekPrizePool(uint256 weekIdx) external view returns (uint256) {
+        return weekPrizePool[weekIdx];
+    }
+
+    function getWeekProtocolCollected(uint256 weekIdx) external view returns (uint256) {
+        return weekProtocolCollected[weekIdx];
+    }
+
+    function isWeekFinalized(uint256 weekIdx) external view returns (bool) {
+        return weekFinalized[weekIdx];
+    }
+
+    function getWeekUserTotalVotes(uint256 weekIdx, address user) external view returns (uint256) {
+        return weekUserTotalVotes[weekIdx][user];
+    }
 }
 
