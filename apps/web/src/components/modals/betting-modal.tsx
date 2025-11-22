@@ -95,7 +95,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
                 : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
             }`}
           >
-            {val} CELO
+            {val} USDC
           </button>
         ))}
       </div>
@@ -110,7 +110,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
             placeholder="Enter amount"
           />
           <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
-            CELO
+            USDC
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
             Processing...
           </>
         ) : (
-          `Bet ${amount} CELO`
+          `Bet ${amount} USDC`
         )}
       </Button>
     </ModalWrapper>

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /*
   MiniAppWeeklyBets
-  - Celo / cUSD ERC20 used for payments (constructor arg)
+  - USDC ERC20 used for payments on Celo Sepolia (constructor arg)
   - Weeks are anchored by `startTime` (should be Monday 00:00 UTC epoch)
   - Voting is only allowed on `currentWeek`. After finalization, currentWeek increments.
   - Finalization can be called by admin or automatically by first claimer (if end time reached).

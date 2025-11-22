@@ -1,17 +1,37 @@
+import { formatUnits } from "viem";
+
 /**
  * Format a number as currency
  */
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
+export function formatCurrency(amount: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
     currency,
   }).format(amount);
 }
 
 /**
+ * Format USDC amount (6 decimals) with max 2 decimal places
+ */
+export function formatUSDC(amount: bigint | string): string {
+  const amountBigInt = typeof amount === "string" ? BigInt(amount) : amount;
+  const formatted = formatUnits(amountBigInt, 6); // USDC has 6 decimals
+  const num = parseFloat(formatted);
+
+  // Format with max 2 decimals, removing trailing zeros
+  const fixed = num.toFixed(2);
+  // Remove trailing zeros and decimal point if not needed
+  return fixed.replace(/\.?0+$/, "");
+}
+
+/**
  * Truncate an address for display
  */
-export function truncateAddress(address: string, startLength = 6, endLength = 4): string {
+export function truncateAddress(
+  address: string,
+  startLength = 6,
+  endLength = 4
+): string {
   if (address.length <= startLength + endLength) {
     return address;
   }

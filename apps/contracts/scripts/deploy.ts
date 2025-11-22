@@ -4,7 +4,7 @@
  * 
  * Usage:
  *   npm run deploy:script -- --network sepolia
- *   npm run deploy:script -- --network celo --cUSD 0x765DE816845861e75A25fCA122bb6898B8B1282a
+ *   npm run deploy:script -- --network celo --cUSD 0x765DE816845861e75A25fCA122bb6898B8B1282a (cUSD on mainnet)
  *   npm run deploy:script -- --network sepolia --protocolRecipient 0x...
  *   npm run deploy:script -- --network sepolia --startTime 1704067200
  */
@@ -46,7 +46,7 @@ const NETWORKS = {
   sepolia: {
     name: "sepolia",
     chainId: 11142220,
-    cUSD: process.env.SEPOLIA_CUSD_ADDRESS || "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+    cUSD: process.env.SEPOLIA_USDC_ADDRESS || "0x01C5C0122039549AD1493B8220cABEdD739BC44E", // USDC on Celo Sepolia
     explorer: "https://celo-sepolia.blockscout.com",
   },
   localhost: {
@@ -148,7 +148,7 @@ Usage:
 
 Options:
   --network, -n <name>          Network to deploy to (celo, sepolia, localhost) [default: sepolia]
-  --cUSD, -c <address>          cUSD token address (optional, uses network default if not provided)
+  --cUSD, -c <address>          USDC token address (optional, uses network default if not provided)
   --protocolRecipient, -p <addr> Protocol fee recipient address (optional, uses deployer if not provided)
   --startTime, -s <timestamp>   Start time (Unix timestamp) (optional, uses DEFAULT_START_TIME constant or calculates previous Saturday)
   --reset, -r                   Reset deployment state before deploying
@@ -276,8 +276,8 @@ async function deploy() {
     const protocolRecipientRaw = args.protocolRecipient || deployerAddress;
     const protocolRecipient = ensure0xPrefix(protocolRecipientRaw);
     
-    console.log(`   cUSD (raw): ${cUSDRaw}`);
-    console.log(`   cUSD (normalized): ${cUSD}`);
+    console.log(`   USDC (raw): ${cUSDRaw}`);
+    console.log(`   USDC (normalized): ${cUSD}`);
     console.log(`   Protocol Recipient (raw): ${protocolRecipientRaw}`);
     console.log(`   Protocol Recipient (normalized): ${protocolRecipient}`);
     
@@ -297,7 +297,7 @@ async function deploy() {
     console.log("\n🚀 Starting deployment...");
     console.log(`   Network: ${network} (Chain ID: ${networkConfig.chainId})`);
     console.log(`   Deployer Address: ${deployerAddress}`);
-    console.log(`   cUSD Address: ${cUSD}`);
+    console.log(`   USDC Address: ${cUSD}`);
     console.log(`   Protocol Recipient: ${protocolRecipient}`);
     console.log(`   Start Time: ${startTime} (${new Date(startTime * 1000).toISOString()})`);
     console.log(`   Initial Price: ${initialPrice}`);
@@ -331,7 +331,7 @@ async function deploy() {
         initialPrice
       }
     }, null, 2)}`);
-    console.log(`   - cUSD address format: ${cUSD.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
+    console.log(`   - USDC address format: ${cUSD.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log(`   - Protocol recipient format: ${protocolRecipient.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log(`   - Deployer address format: ${deployerAddress.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log("");

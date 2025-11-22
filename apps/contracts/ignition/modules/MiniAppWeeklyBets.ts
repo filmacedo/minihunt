@@ -3,16 +3,16 @@
 
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-// cUSD addresses on different networks
-// Celo Mainnet: 0x765DE816845861e75A25fCA122bb6898B8B1282a
-// Celo Sepolia: 0x01C5C0122039549AD1493B8220cABEdD739BC44E
+// USDC addresses on different networks
+// Celo Mainnet: 0x765DE816845861e75A25fCA122bb6898B8B1282a (cUSD)
+// Celo Sepolia: 0x01C5C0122039549AD1493B8220cABEdD739BC44E (USDC)
 
 const MiniAppWeeklyBetsModule = buildModule("MiniAppWeeklyBetsModule", (m: any) => {
   // Get parameters with defaults
-  // Default cUSD address for Celo Sepolia (can be overridden via deployment parameters)
+  // Default USDC address for Celo Sepolia (can be overridden via deployment parameters)
   const cUSD = m.getParameter(
     "cUSD",
-    "0x01C5C0122039549AD1493B8220cABEdD739BC44E" // Celo Sepolia cUSD address
+    "0x01C5C0122039549AD1493B8220cABEdD739BC44E" // Celo Sepolia USDC address
   );
   
   // protocolRecipient - default to deployer account (index 0) if not provided

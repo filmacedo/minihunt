@@ -1,6 +1,6 @@
 import { Icons } from "@/components/ui/icons";
 import { WeekData } from "@/lib/types";
-import { formatEther } from "viem";
+import { formatUSDC } from "@/lib/app-utils";
 import { useMemo } from "react";
 
 interface PrizeBannerProps {
@@ -23,7 +23,7 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
     return `${days}d ${hours}h ${minutes}m`;
   }, [week]);
 
-  const prizePool = week ? formatEther(BigInt(week.prizePool)) : "0";
+  const prizePool = week ? formatUSDC(week.prizePool) : "0";
   const weekNumber = week?.id ? `Week ${week.id}` : "Week 12";
 
   return (
@@ -39,7 +39,7 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
         </div>
 
         <div className="text-5xl font-bold text-foreground tracking-tight font-mono">
-          {prizePool} CELO
+          {prizePool} USDC
         </div>
       </div>
 

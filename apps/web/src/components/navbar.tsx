@@ -23,7 +23,10 @@ export function TopNav({ onOpenModal }: TopNavProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
-    // Initialize theme from html class or local storage
+    // Initialize theme from html class, defaulting to dark
+    if (!document.documentElement.classList.contains("dark") && !document.documentElement.classList.contains("light")) {
+      document.documentElement.classList.add("dark");
+    }
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
   }, []);

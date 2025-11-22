@@ -27,7 +27,7 @@ const MINI_APP_WEEKLY_BETS_ABI = JSON.parse(readFileSync(abiPath, "utf-8")) as A
 // Configuration
 const CELO_SEPOLIA_RPC = process.env.CELO_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
 const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS || "0x2b50Ae04F0B37e7a7Eb95aB5A2C75da8aADfe198") as Address;
-const CUSD_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address;
+const USDC_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address; // USDC on Celo Sepolia
 const MINI_APP_URL = "https://base.builderscore.xyz/";
 const FID = 253890;
 const API_URL = process.env.API_URL || "http://localhost:3000";
@@ -143,7 +143,7 @@ async function main() {
   console.log("📝 Mini App URL:", MINI_APP_URL);
   console.log("📋 FID:", FID);
   console.log("🔗 Contract:", CONTRACT_ADDRESS);
-  console.log("💵 cUSD Token:", CUSD_ADDRESS);
+  console.log("💵 USDC Token:", USDC_ADDRESS);
   console.log("🌐 API URL:", API_URL);
   console.log("");
 
@@ -166,17 +166,17 @@ async function main() {
 
   // Get token decimals
   const decimals = await publicClient.readContract({
-    address: CUSD_ADDRESS,
+    address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "decimals",
   }) as number;
 
-  console.log("🔢 cUSD Decimals:", decimals);
+  console.log("🔢 USDC Decimals:", decimals);
   console.log("");
 
   // Check balance
   const balance = await publicClient.readContract({
-    address: CUSD_ADDRESS,
+    address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "balanceOf",
     args: [account.address],
@@ -185,8 +185,8 @@ async function main() {
   const decimalsDivisor = BigInt(10 ** decimals);
   const balanceFormatted = (Number(balance) / Number(decimalsDivisor)).toFixed(6);
   
-  console.log("💰 cUSD Balance:", balance.toString(), "units");
-  console.log("   (", balanceFormatted, "cUSD)");
+  console.log("💰 USDC Balance:", balance.toString(), "units");
+  console.log("   (", balanceFormatted, "USDC)");
   console.log("");
 
   // Check current price (get initial price from contract)
@@ -206,10 +206,10 @@ async function main() {
   // The contract will transfer INITIAL_PRICE (1e18) units
   // If token has 6 decimals: 1e18 units = 1e12 cUSD (1 trillion cUSD!)
   // If token has 18 decimals: 1e18 units = 1 cUSD
-  const priceInCUSD = Number(initialPrice) / Number(decimalsDivisor);
+  const priceInUSDC = Number(initialPrice) / Number(decimalsDivisor);
   
   console.log("💸 Initial Price (contract will transfer):", initialPrice.toString(), "token units");
-  console.log("💸 Initial Price (in cUSD):", priceInCUSD.toFixed(6), "cUSD");
+  console.log("💸 Initial Price (in USDC):", priceInUSDC.toFixed(6), "USDC");
   console.log("");
 
   // Check if balance is sufficient
@@ -217,15 +217,15 @@ async function main() {
   if (balance < initialPrice) {
     const needed = initialPrice - balance;
     const neededFormatted = (Number(needed) / Number(decimalsDivisor)).toFixed(6);
-    const requiredFormatted = priceInCUSD.toFixed(6);
+    const requiredFormatted = priceInUSDC.toFixed(6);
     
     throw new Error(
-      `❌ Insufficient cUSD balance!\n` +
-      `   Current balance: ${balanceFormatted} cUSD\n` +
-      `   Required: ${requiredFormatted} cUSD (contract will transfer ${initialPrice.toString()} token units)\n` +
-      `   Need to add: ${neededFormatted} cUSD\n` +
+      `❌ Insufficient USDC balance!\n` +
+      `   Current balance: ${balanceFormatted} USDC\n` +
+      `   Required: ${requiredFormatted} USDC (contract will transfer ${initialPrice.toString()} token units)\n` +
+      `   Need to add: ${neededFormatted} USDC\n` +
       `   Token decimals: ${decimals}\n` +
-      `   Please fund your account (${account.address}) with sufficient cUSD to vote.`
+      `   Please fund your account (${account.address}) with sufficient USDC to vote.`
     );
   }
   
@@ -234,18 +234,18 @@ async function main() {
 
   // Check allowance
   const allowance = await publicClient.readContract({
-    address: CUSD_ADDRESS,
+    address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "allowance",
     args: [account.address, CONTRACT_ADDRESS],
   });
 
-  const approvalAmount = parseEther("100"); // Approve 100 cUSD for multiple votes
+  const approvalAmount = parseEther("100"); // Approve 100 USDC for multiple votes
 
   if (allowance < initialPrice) {
-    console.log("🔓 Approving cUSD...");
+    console.log("🔓 Approving USDC...");
     const approveHash = await walletClient.writeContract({
-      address: CUSD_ADDRESS,
+      address: USDC_ADDRESS,
       abi: ERC20_ABI,
       functionName: "approve",
       args: [CONTRACT_ADDRESS, approvalAmount],

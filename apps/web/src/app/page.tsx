@@ -9,7 +9,7 @@ import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useVotersLeaderboard } from "@/hooks/use-voters-leaderboard";
 import { MiniApp } from "@/lib/types";
-import { formatEther } from "viem";
+import { formatUSDC } from "@/lib/app-utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
@@ -175,13 +175,13 @@ export default function Home() {
                       FID: {voter.fid}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                       <span className="font-mono">{formatEther(BigInt(voter.paidAmount))}</span> CELO spent
+                       <span className="font-mono">{formatUSDC(voter.paidAmount)}</span> USDC spent
                     </p>
                   </div>
 
                   <div className="flex-none text-right">
                     <div className="text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
-                      {BigInt(voter.earningAmount) > 0n ? `+${formatEther(BigInt(voter.earningAmount))}` : "-"}
+                      {BigInt(voter.earningAmount) > 0n ? `+${formatUSDC(voter.earningAmount)}` : "-"}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       Est. win
