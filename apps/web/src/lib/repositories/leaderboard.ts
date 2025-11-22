@@ -102,12 +102,30 @@ export interface VoterEarningsEntry {
   fid: string;
   paidAmount: bigint;
   earningAmount: bigint;
+  user: {
+    id: string;
+    name: string | null;
+    bio: string | null;
+    profile_image_url: string | null;
+  } | null;
 }
 
 export async function getVoterEarningsLeaderboard(weekId: string): Promise<VoterEarningsEntry[]> {
   const { data, error } = await client
     .from("fid_week_earnings")
-    .select("fid, paid_amount, earning_amount")
+    .select(
+      `
+        fid,
+        paid_amount,
+        earning_amount,
+        users (
+          id,
+          name,
+          bio,
+          profile_image_url
+        )
+      `
+    )
     .eq("week_id", weekId)
     .order("earning_amount", { ascending: false });
 
@@ -119,10 +137,16 @@ export async function getVoterEarningsLeaderboard(weekId: string): Promise<Voter
     return [];
   }
 
-  return data.map((row) => ({
+  return data.map((row: any) => ({
     fid: row.fid.toString(),
     paidAmount: toWeiBigInt(row.paid_amount),
     earningAmount: toWeiBigInt(row.earning_amount),
+    user: row.users ? {
+      id: row.users.id,
+      name: row.users.name,
+      bio: row.users.bio,
+      profile_image_url: row.users.profile_image_url,
+    } : null,
   }));
 }
 
