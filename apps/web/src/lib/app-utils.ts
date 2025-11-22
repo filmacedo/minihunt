@@ -1,9 +1,11 @@
+import { formatUnits } from "viem";
+
 /**
  * Format a number as currency
  */
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
+export function formatCurrency(amount: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
     currency,
   }).format(amount);
 }
@@ -11,7 +13,11 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
 /**
  * Truncate an address for display
  */
-export function truncateAddress(address: string, startLength = 6, endLength = 4): string {
+export function truncateAddress(
+  address: string,
+  startLength = 6,
+  endLength = 4
+): string {
   if (address.length <= startLength + endLength) {
     return address;
   }

@@ -16,7 +16,7 @@ interface ModalWrapperProps {
 export function ModalWrapper({ onClose, title, children }: ModalWrapperProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-card border-border text-foreground sm:max-w-[425px] rounded-xl">
+      <DialogContent className="bg-card border-border text-foreground sm:max-w-[425px] rounded-xl overflow-hidden">
         {title && (
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-center text-foreground">
@@ -24,7 +24,7 @@ export function ModalWrapper({ onClose, title, children }: ModalWrapperProps) {
             </DialogTitle>
           </DialogHeader>
         )}
-        <div className="pt-2">{children}</div>
+        <div className="mt-4 overflow-hidden">{children}</div>
       </DialogContent>
     </Dialog>
   );

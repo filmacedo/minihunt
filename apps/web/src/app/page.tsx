@@ -15,11 +15,17 @@ import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
-  const { leaderboard: apps, week: appsWeek, isLoading: appsLoading, refetch: refetchApps } = useLeaderboard();
-  const { leaderboard: voters, isLoading: votersLoading } = useVotersLeaderboard();
-  
+  const {
+    leaderboard: apps,
+    week: appsWeek,
+    isLoading: appsLoading,
+    refetch: refetchApps,
+  } = useLeaderboard();
+  const { leaderboard: voters, isLoading: votersLoading } =
+    useVotersLeaderboard();
+
   const [activeTab, setActiveTab] = useState<"apps" | "hunters">("apps");
-  
+
   // Modal State
   const [modalOpen, setModalOpen] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<MiniApp | null>(null);
@@ -85,9 +91,13 @@ export default function Home() {
         {activeTab === "apps" ? (
           <div className="space-y-3">
             {appsLoading ? (
-              <div className="text-center py-10 text-muted-foreground">Loading MiniApps...</div>
+              <div className="text-center py-10 text-muted-foreground">
+                Loading MiniApps...
+              </div>
             ) : apps.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">No MiniApps submitted this week. Be the first!</div>
+              <div className="text-center py-10 text-muted-foreground">
+                No MiniApps submitted this week. Be the first!
+              </div>
             ) : (
               apps.map((entry) => (
                 <div
@@ -97,7 +107,11 @@ export default function Home() {
                   <div className="flex-none w-8 text-center">
                     {entry.rank <= 3 ? (
                       <span className="text-xl">
-                        {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
+                        {entry.rank === 1
+                          ? "🥇"
+                          : entry.rank === 2
+                          ? "🥈"
+                          : "🥉"}
                       </span>
                     ) : (
                       <span className="text-sm font-bold text-muted-foreground font-mono">
@@ -113,7 +127,9 @@ export default function Home() {
                       className="rounded-lg object-cover"
                     />
                     <AvatarFallback className="rounded-lg bg-muted text-muted-foreground font-semibold">
-                      {(entry.miniApp.name || "A").substring(0, 2).toUpperCase()}
+                      {(entry.miniApp.name || "A")
+                        .substring(0, 2)
+                        .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
 
@@ -149,9 +165,13 @@ export default function Home() {
         ) : (
           <div className="space-y-3">
             {votersLoading ? (
-              <div className="text-center py-10 text-muted-foreground">Loading Hunters...</div>
+              <div className="text-center py-10 text-muted-foreground">
+                Loading Hunters...
+              </div>
             ) : voters.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">No votes cast yet this week.</div>
+              <div className="text-center py-10 text-muted-foreground">
+                No votes cast yet this week.
+              </div>
             ) : (
               voters.map((voter, i) => (
                 <div
@@ -182,14 +202,18 @@ export default function Home() {
                     </h3>
                     <p className="text-sm text-muted-foreground truncate">
                       {voter.user?.bio || (
-                        <span className="font-mono">{formatUnits(BigInt(voter.paidAmount), 6)} USDC spent</span>
+                        <span className="font-mono">
+                          {formatUnits(BigInt(voter.paidAmount), 6)} USDC spent
+                        </span>
                       )}
                     </p>
                   </div>
 
                   <div className="flex-none text-right">
                     <div className="text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
-                      {BigInt(voter.earningAmount) > 0n ? `+${formatUnits(BigInt(voter.earningAmount), 6)}` : "-"}
+                      {BigInt(voter.earningAmount) > 0n
+                        ? `+${formatUnits(BigInt(voter.earningAmount), 6)}`
+                        : "-"}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       Est. win
@@ -223,8 +247,8 @@ export default function Home() {
       )}
 
       {modalOpen === "submit" && (
-        <SubmitAppModal 
-          onClose={handleCloseModal} 
+        <SubmitAppModal
+          onClose={handleCloseModal}
           onSuccess={handleSubmitSuccess}
           isOpen={true}
         />

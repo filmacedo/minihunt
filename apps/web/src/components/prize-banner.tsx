@@ -13,13 +13,13 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
     const end = new Date(week.endTime);
     const now = new Date();
     const diff = end.getTime() - now.getTime();
-    
+
     if (diff <= 0) return "Ended";
-    
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     return `${days}d ${hours}h ${minutes}m`;
   }, [week]);
 
@@ -46,20 +46,19 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
-        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono">
+      <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground overflow-x-auto -mx-4 px-4">
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
           <Icons.Users className="w-4 h-4" />
-          <span>{totalUniqueVoters.toLocaleString()} unique voters</span>
+          <span>{totalUniqueVoters.toLocaleString()} voters</span>
         </div>
-        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono">
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
           <Icons.Users className="w-4 h-4" />
-          <span>{totalVoters.toLocaleString()} total votes</span>
+          <span>{totalVoters.toLocaleString()} votes</span>
         </div>
-      </div>
-
-      <div className="inline-flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full font-mono">
-        <Icons.Timer className="w-4 h-4" />
-        <span>Ends in: {timeLeft}</span>
+        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
+          <Icons.Timer className="w-4 h-4" />
+          <span>Ends in: {timeLeft}</span>
+        </div>
       </div>
     </div>
   );

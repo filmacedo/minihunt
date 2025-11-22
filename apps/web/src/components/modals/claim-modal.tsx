@@ -2,7 +2,7 @@
 
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
-import { formatEther } from "viem";
+import { formatUnits } from "viem";
 
 interface ClaimModalProps {
   weekId: string;
@@ -11,8 +11,7 @@ interface ClaimModalProps {
 }
 
 export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
-  const earnedAmount = BigInt(earned);
-  const earnedFormatted = formatEther(earnedAmount);
+  const earnedFormatted = formatUnits(BigInt(earned), 6);
 
   const handleClaim = () => {
     // TODO: Implement claim transaction
@@ -31,7 +30,7 @@ export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
           🏆
         </div>
         <h2 className="text-3xl font-bold text-foreground mb-1 font-mono">
-          {earnedFormatted} CELO
+          {earnedFormatted} USDC
         </h2>
         <p className="text-sm text-muted-foreground">Total Winnings</p>
       </div>
@@ -52,7 +51,7 @@ export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
         onClick={handleClaim}
         disabled={true}
       >
-        Claim {earnedFormatted} CELO
+        Claim {earnedFormatted} USDC
       </Button>
     </ModalWrapper>
   );
