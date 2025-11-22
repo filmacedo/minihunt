@@ -37,7 +37,6 @@ This is a monorepo managed by Turborepo with the following structure:
 - `pnpm contracts:compile` - Compile smart contracts
 - `pnpm contracts:test` - Run smart contract tests
 - `pnpm contracts:deploy` - Deploy contracts to local network
-- `pnpm contracts:deploy:alfajores` - Deploy to Celo Alfajores testnet
 - `pnpm contracts:deploy:sepolia` - Deploy to Celo Sepolia testnet
 - `pnpm contracts:deploy:celo` - Deploy to Celo mainnet
 
