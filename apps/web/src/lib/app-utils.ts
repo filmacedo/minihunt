@@ -1,4 +1,5 @@
-import { formatUnits } from "viem";
+import { keccak256, stringToHex } from "viem";
+import { normalizeUrl } from "./miniapp-utils";
 
 /**
  * Format a number as currency
@@ -36,4 +37,12 @@ export function isValidAddress(address: string): boolean {
  */
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate app hash from URL (matches contract's keccak256(normalizedUrl))
+ */
+export function calculateAppHash(url: string): `0x${string}` {
+  const normalizedUrl = normalizeUrl(url);
+  return keccak256(stringToHex(normalizedUrl));
 }
