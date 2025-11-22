@@ -123,7 +123,12 @@ export default function Home() {
                 
                 try {
                   const result = await sdk.actions.addMiniApp();
-                  if (result.added) {
+                  // Handle result - it may be a boolean or have different structure
+                  const wasAdded = result && typeof result === 'object' && 'added' in result 
+                    ? (result as any).added 
+                    : Boolean(result);
+                  
+                  if (wasAdded) {
                     setAddMiniAppMessage("✅ Miniapp added successfully!");
                   } else {
                     setAddMiniAppMessage("ℹ️ Miniapp was not added (user declined or already exists)");
