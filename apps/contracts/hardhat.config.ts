@@ -1,5 +1,10 @@
 import { defineConfig } from "hardhat/config";
 import hardhatToolboxViem from "@nomicfoundation/hardhat-toolbox-viem";
+import { config as dotenvConfig } from "dotenv";
+
+// Load environment variables from .env file
+// Hardhat should auto-load .env, but explicitly loading it ensures it works
+dotenvConfig();
 
 // Helper to format private key with 0x prefix
 function formatPrivateKey(key: string | undefined): string {
@@ -20,6 +25,7 @@ export default defineConfig({
       },
     },
   },
+  // @ts-ignore - mocha config is valid but types may not include it
   mocha: {
     timeout: 40000,
   },
@@ -57,25 +63,33 @@ export default defineConfig({
     },
   },
   etherscan: {
-    apiKey: {
-      celo: process.env.CELOSCAN_API_KEY || "",
-      sepolia: process.env.CELOSCAN_API_KEY || "",
-    },
+    // For CELO mainnet verification on Celoscan, set ETHERSCAN_API_KEY environment variable
+    // Get your API key from: https://celoscan.io/myapikey
+    // Note: Celo uses ETHERSCAN_API_KEY (not CELOSCAN_API_KEY) per official documentation
+    apiKey: (() => {
+      const apiKey = process.env.ETHERSCAN_API_KEY || process.env.CELOSCAN_API_KEY || "";
+      if (apiKey) {
+        console.log(`[Hardhat Config] Etherscan API key loaded (first 10 chars: ${apiKey.substring(0, 10)}...)`);
+      } else {
+        console.log(`[Hardhat Config] Etherscan API key not found. ETHERSCAN_API_KEY=${process.env.ETHERSCAN_API_KEY}, CELOSCAN_API_KEY=${process.env.CELOSCAN_API_KEY ? "set" : "not set"}`);
+      }
+      return apiKey;
+    })(),
     customChains: [
       {
         network: "celo",
         chainId: 42220,
         urls: {
-          apiURL: "https://api.celoscan.io/api",
-          browserURL: "https://celoscan.io",
+          apiURL: "https://api.etherscan.io/v2/api",
+          browserURL: "https://celoscan.io/",
         },
       },
       {
         network: "sepolia",
         chainId: 11142220,
         urls: {
-          apiURL: "https://api-celo-sepolia.blockscout.com/api",
-          browserURL: "https://celo-sepolia.blockscout.com",
+          apiURL: "https://api.etherscan.io/v2/api",
+          browserURL: "https://sepolia.celoscan.io",
         },
       },
     ],

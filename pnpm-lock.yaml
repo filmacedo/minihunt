@@ -45,6 +45,9 @@ importers:
       chai:
         specifier: ^4.3.10
         version: 4.5.0
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       hardhat:
         specifier: ^3.0.15
         version: 3.0.15
@@ -5452,6 +5455,11 @@ packages:
     engines: {node: '>=6.0.0'}
     dependencies:
       esutils: 2.0.3
+    dev: true
+
+  /dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+    engines: {node: '>=12'}
     dev: true
 
   /dunder-proto@1.0.1:

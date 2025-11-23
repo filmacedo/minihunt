@@ -9,11 +9,11 @@ import { findOrCreateWeekByTimestamp, type WeekRecord } from "@/lib/repositories
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
-// Celo Sepolia chain configuration
-const celoSepolia = {
-  id: 11142220,
-  name: "Celo Sepolia",
-  network: "celo-sepolia",
+// Celo Mainnet chain configuration
+const celoMainnet = {
+  id: 42220,
+  name: "Celo",
+  network: "celo",
   nativeCurrency: {
     decimals: 18,
     name: "CELO",
@@ -29,8 +29,8 @@ const celoSepolia = {
   },
   blockExplorers: {
     default: {
-      name: "Blockscout",
-      url: "https://celo-sepolia.blockscout.com",
+      name: "Celoscan",
+      url: "https://celoscan.io",
     },
   },
 } as const;
@@ -39,7 +39,7 @@ const contractAddress = env.MINI_APP_WEEKLY_BETS_ADDRESS as Address;
 
 const publicClient = createPublicClient({
   transport: http(env.CELO_RPC_URL),
-  chain: celoSepolia,
+  chain: celoMainnet,
 });
 
 const client = getSupabaseServerClient();
