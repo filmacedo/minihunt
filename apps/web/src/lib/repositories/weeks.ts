@@ -31,7 +31,7 @@ const client = getSupabaseServerClient();
 
 let contractMetadataPromise: Promise<ContractWeekMetadata> | null = null;
 
-async function getContractWeekMetadata(): Promise<ContractWeekMetadata> {
+export async function getContractWeekMetadata(): Promise<ContractWeekMetadata> {
   if (!contractMetadataPromise) {
     contractMetadataPromise = (async () => {
       const startTime = (await publicClient.readContract({

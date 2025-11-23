@@ -31,6 +31,9 @@ export async function GET(request: Request) {
     // Get the voter earnings leaderboard for this week
     const leaderboard = await getVoterEarningsLeaderboard(weekRecord.id.toString());
 
+    // Show all voters, but only those who voted for top 3 apps will have earnings > 0
+    // Prize pool distribution: 60% for 1st place, 30% for 2nd place, 10% for 3rd place
+    // Earnings are calculated and stored in fid_week_earnings when votes are processed
     return NextResponse.json({
       week: {
         id: weekRecord.id,
