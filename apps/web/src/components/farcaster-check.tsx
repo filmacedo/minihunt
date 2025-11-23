@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { sdk } from "@farcaster/frame-sdk";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
-import { env } from "@/lib/env";
 
 export function FarcasterCheck({ children }: { children: React.ReactNode }) {
   const [isInFarcaster, setIsInFarcaster] = useState<boolean | null>(null);
@@ -66,8 +65,7 @@ export function FarcasterCheck({ children }: { children: React.ReactNode }) {
 
   // If not in Farcaster, show the message
   if (isInFarcaster === false) {
-    const appUrl = env.NEXT_PUBLIC_URL;
-    const warpcastComposeUrl = `https://farcaster.xyz/~/compose?embeds[]=${encodeURIComponent(appUrl)}`;
+    const warpcastComposeUrl = `https://farcaster.xyz/?launchFrameUrl=https%3A%2F%2Fwww.minihunt.xyz%2F`;
     
     const handleOpenInWarpcast = () => {
       window.open(warpcastComposeUrl, "_blank");
