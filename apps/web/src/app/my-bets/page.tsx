@@ -63,7 +63,7 @@ export default function MyBetsPage() {
                      </div>
                      <div className="text-right">
                         <span className="font-mono text-foreground">
-                           {formatUnits(currentSpent, 6)} USDC
+                           {formatUnits(currentSpent, 18)} CELO
                         </span>
                      </div>
                   </div>
@@ -74,7 +74,7 @@ export default function MyBetsPage() {
                         Total Spent
                       </div>
                       <div className="font-mono text-foreground text-lg">
-                        {formatUnits(currentSpent, 6)} USDC
+                        {formatUnits(currentSpent, 18)} CELO
                       </div>
                     </div>
                     <div className="text-right">
@@ -82,7 +82,7 @@ export default function MyBetsPage() {
                         Projected Win
                       </div>
                       <div className="font-mono text-foreground text-lg text-[#E1FF00] dark:text-[#E1FF00] text-green-600">
-                        {formatUnits(currentEarned, 6)} USDC
+                        {formatUnits(currentEarned, 18)} CELO
                       </div>
                     </div>
                   </div>
@@ -132,7 +132,7 @@ export default function MyBetsPage() {
                       </div>
                       <div className="flex items-center gap-3">
                          <span className={cn("font-mono text-sm", isWinner ? "text-[#E1FF00] dark:text-[#E1FF00] text-green-600" : "text-muted-foreground")}>
-                           {isWinner ? `+${formatUnits(earned, 6)} USDC` : "No Win"}
+                           {isWinner ? `+${formatUnits(earned, 18)} CELO` : "No Win"}
                          </span>
                          <Icons.ChevronRight
                            className={cn(
@@ -147,11 +147,11 @@ export default function MyBetsPage() {
                       <div className="px-4 pb-4 pt-0">
                          <div className="pt-4 border-t border-border/50 flex justify-between">
                             <span className="text-muted-foreground">Total Spent:</span>
-                            <span className="font-mono text-foreground">{formatUnits(spent, 6)} USDC</span>
+                            <span className="font-mono text-foreground">{formatUnits(spent, 18)} CELO</span>
                          </div>
                          <div className="pt-2 flex justify-between">
                             <span className="text-muted-foreground">Total Earned:</span>
-                            <span className="font-mono text-foreground">{formatUnits(earned, 6)} USDC</span>
+                            <span className="font-mono text-foreground">{formatUnits(earned, 18)} CELO</span>
                          </div>
                       </div>
                     )}

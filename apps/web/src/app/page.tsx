@@ -203,7 +203,7 @@ export default function Home() {
                     <p className="text-sm text-muted-foreground truncate">
                       {voter.user?.bio || (
                         <span className="font-mono">
-                          {formatUnits(BigInt(voter.paidAmount), 6)} USDC spent
+                          {formatUnits(BigInt(voter.paidAmount), 18)} CELO spent
                         </span>
                       )}
                     </p>
@@ -212,7 +212,7 @@ export default function Home() {
                   <div className="flex-none text-right">
                     <div className="text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
                       {BigInt(voter.earningAmount) > 0n
-                        ? `+${formatUnits(BigInt(voter.earningAmount), 6)}`
+                        ? `+${formatUnits(BigInt(voter.earningAmount), 18)}`
                         : "-"}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
