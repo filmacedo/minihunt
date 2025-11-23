@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       week: bigint;
     };
 
-    const { appHash, voter, pricePaid, week } = eventArgs;
+    const { appHash, pricePaid, week } = eventArgs;
 
     // Ensure user exists in the database (fetch from Neynar if needed)
     await ensureUserExists(fid);
@@ -297,71 +297,122 @@ export async function POST(request: Request) {
         .eq("id", weekRecord.id);
     }
 
-    // Refresh fid_week_earnings
-    const { data: userVotes } = await client
+    // Refresh fid_week_earnings for ALL voters in this week
+    // When a new vote comes in, rankings can change, so we need to recalculate
+    // earnings for all voters, not just the one who voted
+    const { data: allWeekVotes } = await client
       .from("week_votes")
-      .select("paid_amount")
-      .eq("week_id", weekRecord.id)
-      .eq("fid", fid.toString());
+      .select("fid, paid_amount, transaction_hash")
+      .eq("week_id", weekRecord.id);
 
-    if (userVotes) {
-      const paidAmount = userVotes.reduce((sum, v) => {
-        const amount = v.paid_amount ? BigInt(v.paid_amount) : 0n;
-        return sum + amount;
-      }, 0n);
-
-      // Get earning amount from contract
-      let earningAmount = 0n;
-      try {
-        const earning = await publicClient.readContract({
-          abi: WEEKLY_BETS_ABI,
-          address: contractAddress,
-          functionName: "getUserPayoutForWeek",
-          args: [week, voter],
-        });
-        earningAmount = earning as bigint;
-      } catch (error) {
-        console.error("Failed to get user payout from contract:", error);
-        // Continue with 0 earning amount if contract call fails
+    if (allWeekVotes && allWeekVotes.length > 0) {
+      // Group votes by FID to calculate paid amounts
+      const votesByFid = new Map<string, { paidAmount: bigint; txHash: string }>();
+      for (const vote of allWeekVotes) {
+        const existing = votesByFid.get(vote.fid);
+        const amount = vote.paid_amount ? BigInt(vote.paid_amount) : 0n;
+        if (existing) {
+          existing.paidAmount += amount;
+        } else {
+          votesByFid.set(vote.fid, {
+            paidAmount: amount,
+            txHash: vote.transaction_hash,
+          });
+        }
       }
 
-      // Check if fid_week_earnings record exists
-      const { data: existingEarnings } = await client
-        .from("fid_week_earnings")
-        .select("*")
-        .eq("fid", fid.toString())
-        .eq("week_id", weekRecord.id)
-        .maybeSingle();
+      // Recalculate earnings for all voters from contract
+      // Only voters who voted for top 3 apps will have earnings > 0
+      const earningsUpdates = await Promise.all(
+        Array.from(votesByFid.entries()).map(async ([fid, { paidAmount, txHash }]) => {
+          try {
+            // Get voter address from transaction
+            const receipt = await publicClient.getTransactionReceipt({
+              hash: txHash as Hash,
+            });
 
-      if (existingEarnings) {
-        // Update existing record
-        const { error: updateError } = await client
+            const votedEvent = receipt.logs
+              .map((log) => {
+                try {
+                  return decodeEventLog({
+                    abi: WEEKLY_BETS_ABI,
+                    data: log.data,
+                    topics: log.topics,
+                  });
+                } catch {
+                  return null;
+                }
+              })
+              .find((decoded) => decoded && decoded.eventName === "Voted");
+
+            if (!votedEvent || votedEvent.eventName !== "Voted") {
+              return { fid, paidAmount, earningAmount: 0n, success: false };
+            }
+
+            const eventArgs = votedEvent.args as unknown as {
+              voter: Address;
+            };
+
+            // Get current earnings from contract
+            const earning = await publicClient.readContract({
+              abi: WEEKLY_BETS_ABI,
+              address: contractAddress,
+              functionName: "getUserPayoutForWeek",
+              args: [week, eventArgs.voter],
+            });
+
+            return {
+              fid,
+              paidAmount,
+              earningAmount: earning as bigint,
+              success: true,
+            };
+          } catch (error) {
+            console.error(`Failed to get earnings for fid ${fid}:`, error);
+            return { fid, paidAmount, earningAmount: 0n, success: false };
+          }
+        })
+      );
+
+      // Update fid_week_earnings for all voters
+      for (const { fid, paidAmount, earningAmount, success } of earningsUpdates) {
+        if (!success) continue; // Skip if contract call failed
+
+        const { data: existingEarnings } = await client
           .from("fid_week_earnings")
-          .update({
-            paid_amount: paidAmount.toString(),
-            earning_amount: earningAmount.toString(),
-          })
-          .eq("fid", fid.toString())
-          .eq("week_id", weekRecord.id);
+          .select("*")
+          .eq("fid", fid)
+          .eq("week_id", weekRecord.id)
+          .maybeSingle();
 
-        if (updateError) {
-          console.error("Failed to update fid_week_earnings:", updateError);
-          // Don't fail the request if earnings update fails
-        }
-      } else {
-        // Insert new record
-        const { error: insertError } = await client
-          .from("fid_week_earnings")
-          .insert({
-            fid: fid.toString(),
-            week_id: weekRecord.id,
-            paid_amount: paidAmount.toString(),
-            earning_amount: earningAmount.toString(),
-          });
+        if (existingEarnings) {
+          // Update existing record
+          const { error: updateError } = await client
+            .from("fid_week_earnings")
+            .update({
+              paid_amount: paidAmount.toString(),
+              earning_amount: earningAmount.toString(),
+            })
+            .eq("fid", fid)
+            .eq("week_id", weekRecord.id);
 
-        if (insertError) {
-          console.error("Failed to insert fid_week_earnings:", insertError);
-          // Don't fail the request if earnings insert fails
+          if (updateError) {
+            console.error(`Failed to update fid_week_earnings for fid ${fid}:`, updateError);
+          }
+        } else {
+          // Insert new record
+          const { error: insertError } = await client
+            .from("fid_week_earnings")
+            .insert({
+              fid,
+              week_id: weekRecord.id,
+              paid_amount: paidAmount.toString(),
+              earning_amount: earningAmount.toString(),
+            });
+
+          if (insertError) {
+            console.error(`Failed to insert fid_week_earnings for fid ${fid}:`, insertError);
+          }
         }
       }
     }
