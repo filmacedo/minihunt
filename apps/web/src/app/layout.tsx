@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import Providers from "@/components/providers";
+import { FarcasterCheck } from "@/components/farcaster-check";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -47,7 +48,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <div className="relative flex min-h-screen flex-col">
           <Providers>
-            <main className="flex-1">{children}</main>
+            <FarcasterCheck>
+              <main className="flex-1">{children}</main>
+            </FarcasterCheck>
           </Providers>
         </div>
       </body>
