@@ -43,15 +43,15 @@ export function TopNav({ onOpenModal }: TopNavProps) {
 
   return (
     <>
-      <header className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-background/80 backdrop-blur-md z-40">
+      <header className="flex items-center justify-between px-4 sm:px-6 py-2.5 sm:py-3 border-b border-border sticky top-0 bg-background/80 backdrop-blur-md z-40">
         <Link
           href="/"
-          className="text-lg font-bold tracking-tight flex items-center gap-2"
+          className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
         >
           <span>MiniHunt</span>
         </Link>
-        <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
-          <Icons.Menu className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-10 sm:w-10" onClick={() => setIsOpen(true)}>
+          <Icons.Menu className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
       </header>
 

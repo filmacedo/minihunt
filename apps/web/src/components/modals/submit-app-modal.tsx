@@ -36,6 +36,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   const { context } = useMiniApp();
   const { post } = useApi();
@@ -202,6 +203,9 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
         tx_hash: voteHash,
         fid: context.user.fid
       }).then(async () => {
+        // Show success message
+        setIsSuccess(true);
+        
         // Prompt user to cast after successful API call
         try {
           const appUrl = env.NEXT_PUBLIC_URL;
@@ -221,10 +225,17 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           // Don't block success callback if cast prompt fails
         }
         
-        onSuccess();
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
       }).catch((err) => {
         console.error("Vote indexing failed", err);
-        onSuccess();
+        // Don't block success callback if API submission fails
+        setIsSuccess(true);
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
       });
     }
   }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess, validationResult]);
@@ -237,6 +248,34 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   }, [voteError]);
 
   if (!isOpen) return null;
+
+  // Show success state
+  if (isSuccess) {
+    const frame = validationResult?.manifest?.frame || validationResult?.manifest?.miniapp;
+    const appName = frame?.name || "your app";
+    
+    return (
+      <ModalWrapper onClose={onClose} title="Submission Successful!">
+        <div className="flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-green-500/10 rounded-full mb-4 flex items-center justify-center">
+            <Icons.Check className="h-10 w-10 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">
+            {appName} has been submitted!
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Your app has been submitted and your vote has been recorded. The transaction has been confirmed.
+          </p>
+          <Button
+            className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+      </ModalWrapper>
+    );
+  }
 
   const frame = validationResult?.manifest?.frame || validationResult?.manifest?.miniapp;
   const appName = frame?.name || "Untitled App";

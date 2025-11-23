@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMiniApp } from "@/contexts/miniapp-context";
 import { TopNav } from "@/components/navbar";
 import { Icons } from "@/components/ui/icons";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUserVotes } from "@/hooks/use-user-votes";
 import { formatUnits } from "viem";
@@ -33,6 +34,15 @@ export default function MyBetsPage() {
 
   const currentSpent = currentWeekStat ? BigInt(currentWeekStat.spent) : 0n;
   const currentEarned = currentWeekStat ? BigInt(currentWeekStat.earned) : 0n; // Projected
+
+  // Check if user has any earnings (current or past weeks)
+  const hasEarnings = currentEarned > 0n || pastWeeks.some(week => BigInt(week.earned) > 0n);
+  
+  // Calculate total claimable amount from past weeks only (current week is projected)
+  const totalClaimable = pastWeeks.reduce((sum, week) => {
+    const earned = BigInt(week.earned);
+    return sum + (earned > 0n ? earned : 0n);
+  }, 0n);
 
   return (
     <main className="pb-20 relative min-h-screen bg-muted/10">
@@ -91,6 +101,36 @@ export default function MyBetsPage() {
             </div>
           </div>
         </section>
+
+        <div className="h-px bg-border" />
+
+        {/* Claim Button Section */}
+        {hasEarnings && (
+          <section>
+            <div className="bg-card rounded-xl border border-border shadow-sm p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground mb-1">
+                    Claim Earnings
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {totalClaimable > 0n 
+                      ? `You have ${formatUnits(totalClaimable, 18)} CELO available to claim from past weeks.`
+                      : currentEarned > 0n
+                      ? `You have ${formatUnits(currentEarned, 18)} CELO in projected earnings from the current week.`
+                      : "You have earnings available to claim."}
+                  </p>
+                </div>
+                <Button
+                  disabled
+                  className="w-full sm:w-auto h-11 px-6 text-base bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Claim
+                </Button>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="h-px bg-border" />
 

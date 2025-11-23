@@ -30,6 +30,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const [bettingError, setBettingError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   // Calculate app hash
   const normalizedUrl = app?.frameUrl ? normalizeUrl(app.frameUrl) : undefined;
@@ -150,6 +151,9 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         tx_hash: voteHash,
         fid: context.user.fid
       }).then(async () => {
+        // Show success message
+        setIsSuccess(true);
+        
         // Prompt user to cast after successful API call
         try {
           const appUrl = env.NEXT_PUBLIC_URL;
@@ -168,11 +172,17 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
           // Don't block success callback if cast fails
         }
         
-        onSuccess();
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
       }).catch((err) => {
         console.error("Vote indexing failed", err);
         // Don't block success callback if API submission fails
-        onSuccess();
+        setIsSuccess(true);
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
       });
     }
   }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess, app]);
@@ -185,6 +195,31 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   }, [voteError]);
 
   if (!isOpen || !app) return null;
+
+  // Show success state
+  if (isSuccess) {
+    return (
+      <ModalWrapper onClose={onClose} title="Bet Successful!">
+        <div className="flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-green-500/10 rounded-full mb-4 flex items-center justify-center">
+            <Icons.Check className="h-10 w-10 text-green-500" />
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">
+            Your bet was successful!
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Your vote has been recorded and the transaction has been confirmed.
+          </p>
+          <Button
+            className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+      </ModalWrapper>
+    );
+  }
 
   return (
     <ModalWrapper onClose={onClose} title="Bet on this MiniApp">
