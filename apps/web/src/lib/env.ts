@@ -23,7 +23,7 @@ export const env = createEnv({
       .string()
       .url()
       .optional()
-      .default("https://forno.celo-sepolia.celo-testnet.org"),
+      .default("https://forno.celo.org"),
   },
   client: {
     NEXT_PUBLIC_URL: z
