@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
@@ -29,9 +29,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   const { post } = useApi();
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
-  const [priceChanged, setPriceChanged] = useState(false);
   const [bettingError, setBettingError] = useState<string | null>(null);
-  const previousPriceRef = useRef<bigint | null>(null);
   
   // Calculate app hash
   const normalizedUrl = app?.frameUrl ? normalizeUrl(app.frameUrl) : undefined;
@@ -67,22 +65,6 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
     }
   }, [priceError]);
   
-  // Track price changes
-  useEffect(() => {
-    const currentPrice = price as bigint | undefined;
-    if (currentPrice !== undefined && previousPriceRef.current !== null) {
-      if (currentPrice !== previousPriceRef.current) {
-        setPriceChanged(true);
-        // Auto-hide notice after 3 seconds
-        const timer = setTimeout(() => setPriceChanged(false), 3000);
-        return () => clearTimeout(timer);
-      }
-    }
-    if (currentPrice !== undefined) {
-      previousPriceRef.current = currentPrice;
-    }
-  }, [price]);
-  
   // Vote transaction hooks
   const { 
     data: voteHash, 
@@ -99,13 +81,6 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
     hash: voteHash,
     confirmations: 3, // Wait for 3 confirmations
   });
-  
-  // Hide price change warning when voting starts
-  useEffect(() => {
-    if (isVoting || isVoteConfirming) {
-      setPriceChanged(false);
-    }
-  }, [isVoting, isVoteConfirming]);
   
   // Format price for display (CELO has 18 decimals)
   const priceBigInt = price as bigint | undefined;
@@ -233,13 +208,6 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
           {app.description || app.frameUrl}
         </p>
       </div>
-
-      {priceChanged && (
-        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-sm text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
-          <Icons.Alert className="h-4 w-4" />
-          <span>Price has changed! Please review the new amount.</span>
-        </div>
-      )}
 
       {bettingError && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
