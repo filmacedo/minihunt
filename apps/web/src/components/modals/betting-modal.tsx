@@ -100,6 +100,13 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
     confirmations: 3, // Wait for 3 confirmations
   });
   
+  // Hide price change warning when voting starts
+  useEffect(() => {
+    if (isVoting || isVoteConfirming) {
+      setPriceChanged(false);
+    }
+  }, [isVoting, isVoteConfirming]);
+  
   // Format price for display (CELO has 18 decimals)
   const priceBigInt = price as bigint | undefined;
   const priceFormatted = priceBigInt ? formatUnits(priceBigInt, 18) : "0";
