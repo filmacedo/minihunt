@@ -25,9 +25,20 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
 
   // CELO has 18 decimals
   const prizePool = week ? formatUnits(BigInt(week.prizePool), 18) : "0";
-  const weekNumber = week?.id ? `Week ${week.id}` : "Week 12";
   const totalVoters = week ? parseInt(week.totalVoters, 10) : 0;
   const totalUniqueVoters = week ? parseInt(week.totalUniqueVoters, 10) : 0;
+
+  const weekDates = useMemo(() => {
+    if (!week) return null;
+    const start = new Date(week.startTime);
+    const end = new Date(week.endTime);
+    
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+    
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  }, [week]);
 
   return (
     <div className="px-4 py-8 text-center space-y-6 border-b border-border bg-background">
@@ -38,9 +49,8 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm font-semibold uppercase tracking-wide">
           <Icons.Trophy className="w-4 h-4" />
-          <span>{weekNumber} Prize Pool</span>
+          <span>{weekDates} Prize Pool</span>
         </div>
-
         <div className="text-5xl font-bold text-foreground tracking-tight font-mono">
           {prizePool} CELO
         </div>
