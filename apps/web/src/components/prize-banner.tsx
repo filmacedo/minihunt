@@ -23,8 +23,8 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
     return `${days}d ${hours}h ${minutes}m`;
   }, [week]);
 
-  // USDC has 6 decimals, not 18 like CELO
-  const prizePool = week ? formatUnits(BigInt(week.prizePool), 6) : "0";
+  // CELO has 18 decimals
+  const prizePool = week ? formatUnits(BigInt(week.prizePool), 18) : "0";
   const weekNumber = week?.id ? `Week ${week.id}` : "Week 12";
   const totalVoters = week ? parseInt(week.totalVoters, 10) : 0;
   const totalUniqueVoters = week ? parseInt(week.totalUniqueVoters, 10) : 0;
@@ -42,7 +42,7 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
         </div>
 
         <div className="text-5xl font-bold text-foreground tracking-tight font-mono">
-          {prizePool} USDC
+          {prizePool} CELO
         </div>
       </div>
 

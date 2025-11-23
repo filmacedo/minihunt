@@ -11,7 +11,7 @@ interface ClaimModalProps {
 }
 
 export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
-  const earnedFormatted = formatUnits(BigInt(earned), 6);
+  const earnedFormatted = formatUnits(BigInt(earned), 18);
 
   const handleClaim = () => {
     // TODO: Implement claim transaction
@@ -30,7 +30,7 @@ export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
           🏆
         </div>
         <h2 className="text-3xl font-bold text-foreground mb-1 font-mono">
-          {earnedFormatted} USDC
+          {earnedFormatted} CELO
         </h2>
         <p className="text-sm text-muted-foreground">Total Winnings</p>
       </div>
@@ -51,7 +51,7 @@ export function ClaimModal({ weekId, earned, onClose }: ClaimModalProps) {
         onClick={handleClaim}
         disabled={true}
       >
-        Claim {earnedFormatted} USDC
+        Claim {earnedFormatted} CELO
       </Button>
     </ModalWrapper>
   );

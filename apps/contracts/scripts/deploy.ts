@@ -4,15 +4,17 @@
  * 
  * Usage:
  *   npm run deploy:script -- --network sepolia
- *   npm run deploy:script -- --network celo --cUSD 0x765DE816845861e75A25fCA122bb6898B8B1282a (cUSD on mainnet)
+ *   npm run deploy:script -- --network celo --protocolRecipient 0x...
  *   npm run deploy:script -- --network sepolia --protocolRecipient 0x...
  *   npm run deploy:script -- --network sepolia --startTime 1704067200
+ *   npm run deploy:script -- --network sepolia --initialPrice 100000000000000000
  */
 
 import { execSync } from "child_process";
 import { writeFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { privateKeyToAccount } from "viem/accounts";
+import { formatUnits } from "viem";
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -40,19 +42,16 @@ const NETWORKS = {
   celo: {
     name: "celo",
     chainId: 42220,
-    cUSD: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
     explorer: "https://celoscan.io",
   },
   sepolia: {
     name: "sepolia",
     chainId: 11142220,
-    cUSD: process.env.SEPOLIA_USDC_ADDRESS || "0x01C5C0122039549AD1493B8220cABEdD739BC44E", // USDC on Celo Sepolia
     explorer: "https://celo-sepolia.blockscout.com",
   },
   localhost: {
     name: "localhost",
     chainId: 31337,
-    cUSD: process.env.MOCK_CUSD_ADDRESS || "0x0000000000000000000000000000000000000000",
     explorer: "http://localhost:8545",
   },
 } as const;
@@ -100,7 +99,6 @@ function getPreviousSaturday(): number {
  */
 function parseArgs(): {
   network: NetworkName;
-  cUSD?: string;
   protocolRecipient?: string;
   startTime?: number;
   initialPrice?: string;
@@ -117,10 +115,6 @@ function parseArgs(): {
       case "--network":
       case "-n":
         result.network = args[++i];
-        break;
-      case "--cUSD":
-      case "-c":
-        result.cUSD = args[++i];
         break;
       case "--protocolRecipient":
       case "-p":
@@ -148,9 +142,9 @@ Usage:
 
 Options:
   --network, -n <name>          Network to deploy to (celo, sepolia, localhost) [default: sepolia]
-  --cUSD, -c <address>          USDC token address (optional, uses network default if not provided)
   --protocolRecipient, -p <addr> Protocol fee recipient address (optional, uses deployer if not provided)
   --startTime, -s <timestamp>   Start time (Unix timestamp) (optional, uses DEFAULT_START_TIME constant or calculates previous Saturday)
+  --initialPrice, -i <amount>    Initial price in wei (optional, defaults to 1e17 = 0.1 CELO)
   --reset, -r                   Reset deployment state before deploying
   --help, -h                    Show this help message
 
@@ -165,8 +159,8 @@ Configuration:
 
 Examples:
   npm run deploy:script -- --network sepolia
-  npm run deploy:script -- --network celo --cUSD 0x765DE816845861e75A25fCA122bb6898B8B1282a
-  npm run deploy:script -- --network sepolia --protocolRecipient 0x1234... --startTime 1704067200
+  npm run deploy:script -- --network celo --protocolRecipient 0x1234... --startTime 1704067200
+  npm run deploy:script -- --network sepolia --initialPrice 100000000000000000
         `);
         process.exit(0);
         break;
@@ -183,7 +177,6 @@ function saveDeploymentInfo(
   network: NetworkName,
   contractAddress: string,
   params: {
-    cUSD: string;
     protocolRecipient: string;
     startTime: number;
     initialPrice: string;
@@ -211,7 +204,6 @@ function saveDeploymentInfo(
     contractAddress: contractAddress,
     deploymentTime: new Date().toISOString(),
     parameters: {
-      cUSD: params.cUSD,
       protocolRecipient: params.protocolRecipient,
       startTime: params.startTime,
       startTimeReadable: new Date(params.startTime * 1000).toISOString(),
@@ -271,13 +263,9 @@ async function deploy() {
 
     const networkConfig = NETWORKS[network];
     // Ensure all addresses have 0x prefix
-    const cUSDRaw = args.cUSD || networkConfig.cUSD;
-    const cUSD = ensure0xPrefix(cUSDRaw);
     const protocolRecipientRaw = args.protocolRecipient || deployerAddress;
     const protocolRecipient = ensure0xPrefix(protocolRecipientRaw);
     
-    console.log(`   USDC (raw): ${cUSDRaw}`);
-    console.log(`   USDC (normalized): ${cUSD}`);
     console.log(`   Protocol Recipient (raw): ${protocolRecipientRaw}`);
     console.log(`   Protocol Recipient (normalized): ${protocolRecipient}`);
     
@@ -291,22 +279,21 @@ async function deploy() {
       startTime = getPreviousSaturday();
     }
 
-    // Determine initial price: command line arg > default (1e6 for 6-decimal tokens)
-    const initialPrice = args.initialPrice || "1000000"; // Default: 1e6 (1 USDC with 6 decimals)
+    // Determine initial price: command line arg > default (1e17 for 0.1 native CELO)
+    const initialPrice = args.initialPrice || "100000000000000000"; // Default: 1e17 (0.1 CELO with 18 decimals)
 
     console.log("\n🚀 Starting deployment...");
     console.log(`   Network: ${network} (Chain ID: ${networkConfig.chainId})`);
     console.log(`   Deployer Address: ${deployerAddress}`);
-    console.log(`   USDC Address: ${cUSD}`);
     console.log(`   Protocol Recipient: ${protocolRecipient}`);
     console.log(`   Start Time: ${startTime} (${new Date(startTime * 1000).toISOString()})`);
-    console.log(`   Initial Price: ${initialPrice}`);
+    console.log(`   Initial Price: ${initialPrice} (${formatUnits(BigInt(initialPrice), 18)} CELO)`);
 
     // Build command for Hardhat Ignition
     let baseCommand = `hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network ${network}`;
     
     // Add parameters (always include protocolRecipient to avoid m.getAccount(0) issue)
-    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"cUSD":"${cUSD}","protocolRecipient":"${protocolRecipient}","startTime":${startTime},"initialPrice":${initialPrice}}}'`;
+    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"protocolRecipient":"${protocolRecipient}","startTime":${startTime},"initialPrice":${initialPrice}}}'`;
 
     // Reset deployment if requested
     if (args.reset) {
@@ -331,13 +318,11 @@ async function deploy() {
     console.log(`   - Network: ${network}`);
     console.log(`   - Parameters JSON: ${JSON.stringify({
       MiniAppWeeklyBetsModule: {
-        cUSD,
         protocolRecipient,
         startTime,
         initialPrice
       }
     }, null, 2)}`);
-    console.log(`   - USDC address format: ${cUSD.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log(`   - Protocol recipient format: ${protocolRecipient.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log(`   - Deployer address format: ${deployerAddress.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
     console.log("");
@@ -450,7 +435,6 @@ async function deploy() {
 
       // Save deployment info
       saveDeploymentInfo(network, contractAddress, {
-        cUSD,
         protocolRecipient: protocolRecipient || "deployer",
         startTime,
         initialPrice,
@@ -458,8 +442,8 @@ async function deploy() {
 
       console.log(`\n💡 To verify the contract, run:`);
       const verifyParams = protocolRecipient
-        ? `${cUSD} ${protocolRecipient} ${startTime} ${initialPrice}`
-        : `${cUSD} <deployer_address> ${startTime} ${initialPrice}`;
+        ? `${protocolRecipient} ${startTime} ${initialPrice}`
+        : `<deployer_address> ${startTime} ${initialPrice}`;
       console.log(
         `   npx hardhat verify --network ${network} ${contractAddress} ${verifyParams}`
       );

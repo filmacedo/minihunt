@@ -14,6 +14,7 @@ import {
   http,
   keccak256,
   stringToHex,
+  formatEther,
   parseEther,
   type Address,
   type Hash,
@@ -43,48 +44,9 @@ const CELO_SEPOLIA_RPC =
   process.env.CELO_RPC_URL || "https://forno.celo-sepolia.celo-testnet.org";
 const CONTRACT_ADDRESS = (process.env.MINI_APP_WEEKLY_BETS_ADDRESS ||
   "0x272ab20E6AF4FbF2b87B93d842288f8Bd5756f2c") as Address;
-const CUSD_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E" as Address;
 const MINI_APP_URL = "https://celo.builderscore.xyz/";
 const FID = 253890;
 const API_URL = process.env.API_URL || "http://localhost:3000";
-
-// ERC20 ABI (minimal - just approve, balanceOf, allowance, and decimals)
-const ERC20_ABI = [
-  {
-    name: "approve",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
-    name: "balanceOf",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "allowance",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "decimals",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint8" }],
-  },
-] as const;
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -163,7 +125,6 @@ async function main() {
   console.log("📝 Mini App URL:", MINI_APP_URL);
   console.log("📋 FID:", FID);
   console.log("🔗 Contract:", CONTRACT_ADDRESS);
-  console.log("💵 USDC Token:", USDC_ADDRESS);
   console.log("🌐 API URL:", API_URL);
   console.log("");
 
@@ -184,129 +145,62 @@ async function main() {
   console.log("🔑 App Hash:", appHash);
   console.log("");
 
-  // Get token decimals
-  const decimals = (await publicClient.readContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-  })) as number;
-
-  console.log("🔢 USDC Decimals:", decimals);
-  console.log("");
-
-  // Check balance
-  const balance = await publicClient.readContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: [account.address],
+  // Check native CELO balance
+  const balance = await publicClient.getBalance({
+    address: account.address,
   });
 
-  const decimalsDivisor = BigInt(10 ** decimals);
-  const balanceFormatted = (Number(balance) / Number(decimalsDivisor)).toFixed(
-    6
-  );
+  const balanceFormatted = formatEther(balance);
 
-  console.log("💰 USDC Balance:", balance.toString(), "units");
-  console.log("   (", balanceFormatted, "USDC)");
+  console.log("💰 CELO Balance:", balance.toString(), "wei");
+  console.log("   (", balanceFormatted, "CELO)");
   console.log("");
 
-  // Check current price (get initial price from contract)
-  // Note: Contract's initialPrice is updatable and has no decimals assumption
+  // Get initial price from contract
+  // Note: Contract's initialPrice is in wei (18 decimals for native CELO)
   const initialPrice = (await publicClient.readContract({
     address: CONTRACT_ADDRESS,
     abi: WEEKLY_BETS_ABI,
     functionName: "initialPrice",
   })) as bigint;
 
-  // Note: Contract's initialPrice is updatable and has no decimals assumption
-  // The owner can set it to match the token's decimals
-  console.log(
-    "ℹ️  Token has",
-    decimals,
-    "decimals. Contract's initialPrice is",
-    initialPrice.toString(),
-    "token units."
-  );
-  console.log(
-    "   (Owner can update initialPrice via setInitialPrice() to match token decimals)"
-  );
-  console.log("");
-
-  // The contract will transfer INITIAL_PRICE (1e18) units
-  // If token has 6 decimals: 1e18 units = 1e12 cUSD (1 trillion cUSD!)
-  // If token has 18 decimals: 1e18 units = 1 cUSD
-  const priceInUSDC = Number(initialPrice) / Number(decimalsDivisor);
+  const priceInCELO = formatEther(initialPrice);
 
   console.log(
     "💸 Initial Price (contract will transfer):",
     initialPrice.toString(),
-    "token units"
+    "wei"
   );
-  console.log("💸 Initial Price (in USDC):", priceInUSDC.toFixed(6), "USDC");
+  console.log("💸 Initial Price (in CELO):", priceInCELO, "CELO");
   console.log("");
 
   // Check if balance is sufficient
-  // The contract will transfer `initialPrice` amount in token units
+  // The contract will transfer `initialPrice` amount in wei
   if (balance < initialPrice) {
     const needed = initialPrice - balance;
-    const neededFormatted = (Number(needed) / Number(decimalsDivisor)).toFixed(
-      6
-    );
-    const requiredFormatted = priceInUSDC.toFixed(6);
+    const neededFormatted = formatEther(needed);
+    const requiredFormatted = priceInCELO;
 
     throw new Error(
-      `❌ Insufficient USDC balance!\n` +
-        `   Current balance: ${balanceFormatted} USDC\n` +
-        `   Required: ${requiredFormatted} USDC (contract will transfer ${initialPrice.toString()} token units)\n` +
-        `   Need to add: ${neededFormatted} USDC\n` +
-        `   Token decimals: ${decimals}\n` +
-        `   Please fund your account (${account.address}) with sufficient USDC to vote.`
+      `❌ Insufficient CELO balance!\n` +
+        `   Current balance: ${balanceFormatted} CELO\n` +
+        `   Required: ${requiredFormatted} CELO (contract will transfer ${initialPrice.toString()} wei)\n` +
+        `   Need to add: ${neededFormatted} CELO\n` +
+        `   Please fund your account (${account.address}) with sufficient CELO to vote.`
     );
   }
 
   console.log("✅ Balance is sufficient for voting!");
   console.log("");
 
-  // Check allowance
-  const allowance = await publicClient.readContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: [account.address, CONTRACT_ADDRESS],
-  });
-
-  const approvalAmount = parseEther("100"); // Approve 100 USDC for multiple votes
-
-  if (allowance < initialPrice) {
-    console.log("🔓 Approving USDC...");
-    const approveHash = await walletClient.writeContract({
-      address: USDC_ADDRESS,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [CONTRACT_ADDRESS, approvalAmount],
-    });
-
-    console.log("⏳ Waiting for approval transaction...");
-    await publicClient.waitForTransactionReceipt({ hash: approveHash });
-    console.log("✅ Approval confirmed:", approveHash);
-    console.log("");
-  } else {
-    console.log(
-      "✅ Already approved (allowance:",
-      allowance.toString(),
-      "wei)"
-    );
-    console.log("");
-  }
-
-  // Vote on the contract
+  // Vote on the contract (send native CELO)
   console.log("🗳️  Voting on contract...");
   const voteHash = await walletClient.writeContract({
     address: CONTRACT_ADDRESS,
     abi: WEEKLY_BETS_ABI,
     functionName: "vote",
     args: [appHash, MINI_APP_URL],
+    value: initialPrice, // Send native CELO
   });
 
   console.log("⏳ Waiting for vote transaction...");

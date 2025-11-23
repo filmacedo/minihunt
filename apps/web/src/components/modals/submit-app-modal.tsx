@@ -5,14 +5,13 @@ import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
-import { parseUnits, formatUnits } from "viem";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance } from "wagmi";
+import { formatUnits } from "viem";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
 import { type FarcasterManifest, normalizeUrl } from "@/lib/miniapp-utils";
 import { calculateAppHash } from "@/lib/app-utils";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
-import ERC20_ABI from "@/lib/abis/erc20.json";
 import { cn } from "@/lib/utils";
 
 interface SubmitAppModalProps {
@@ -29,7 +28,6 @@ interface ValidationResult {
 }
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`;
-const APPROVAL_AMOUNT = parseUnits("100", 6); // Approve 100 USDC for multiple votes
 
 export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalProps) {
   const [url, setUrl] = useState("");
@@ -41,45 +39,16 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const { post } = useApi();
   const { address } = useAccount();
   
-  // Read contract hooks - fetch USDC address, balance, allowance, decimals, initialPrice
-  const { data: usdcAddress } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: MINI_APP_WEEKLY_BETS_ABI,
-    functionName: "cUSD",
+  // Read native CELO balance
+  const { data: balanceData } = useBalance({
+    address: address,
     query: {
-      enabled: isOpen && !!CONTRACT_ADDRESS,
+      enabled: isOpen && !!address,
     },
-  }) as { data: `0x${string}` | undefined };
+  });
+  const balance = balanceData?.value;
 
-  const { data: tokenDecimals } = useReadContract({
-    address: usdcAddress,
-    abi: ERC20_ABI,
-    functionName: "decimals",
-    query: {
-      enabled: isOpen && !!usdcAddress,
-    },
-  }) as { data: number | undefined };
-
-  const { data: balance } = useReadContract({
-    address: usdcAddress,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: isOpen && !!usdcAddress && !!address,
-    },
-  }) as { data: bigint | undefined };
-
-  const { data: allowance } = useReadContract({
-    address: usdcAddress,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address && CONTRACT_ADDRESS ? [address, CONTRACT_ADDRESS] : undefined,
-    query: {
-      enabled: isOpen && !!usdcAddress && !!address && !!CONTRACT_ADDRESS,
-    },
-  }) as { data: bigint | undefined };
-
+  // Read initial price from contract
   const { data: initialPrice } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: MINI_APP_WEEKLY_BETS_ABI,
@@ -88,24 +57,6 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
       enabled: isOpen && !!CONTRACT_ADDRESS,
     },
   }) as { data: bigint | undefined };
-
-  // Calculate if approval is needed
-  const needsApproval = initialPrice !== undefined && allowance !== undefined && allowance < initialPrice;
-
-  // Approval transaction hooks
-  const { 
-    data: approvalHash, 
-    isPending: isApproving, 
-    writeContract: writeApproval,
-    error: approvalError,
-  } = useWriteContract();
-
-  const { 
-    isLoading: isApprovalConfirming, 
-    isSuccess: isApprovalSuccess 
-  } = useWaitForTransactionReceipt({
-    hash: approvalHash,
-  });
 
   // Vote transaction hooks
   const { 
@@ -121,38 +72,6 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   } = useWaitForTransactionReceipt({
     hash: voteHash,
   });
-
-
-  // Handle approval success - proceed to vote
-  useEffect(() => {
-    if (isApprovalSuccess && needsApproval && url && validationResult?.manifest && usdcAddress) {
-      // Approval confirmed, now proceed with vote
-      const normalizedUrl = normalizeUrl(url);
-      const appHash = calculateAppHash(url);
-
-      // Save metadata (optimistic)
-      const frame = validationResult.manifest.frame || validationResult.manifest.miniapp;
-      if (frame) {
-        post("/api/miniapps", {
-          frameUrl: url,
-          frameSignature: appHash,
-          name: frame.name || null,
-          description: frame.description || frame.tagline || null,
-          iconUrl: frame.iconUrl || null,
-        }).catch((err) => {
-          console.warn("Metadata save failed", err);
-        });
-      }
-
-      // Submit to blockchain
-      writeVote({
-        address: CONTRACT_ADDRESS,
-        abi: MINI_APP_WEEKLY_BETS_ABI,
-        functionName: "vote",
-        args: [appHash as `0x${string}`, normalizedUrl],
-      });
-    }
-  }, [isApprovalSuccess, needsApproval, url, validationResult, usdcAddress, writeVote, post]);
 
   // Debounced validation effect
   useEffect(() => {
@@ -197,7 +116,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   }, [url, post]);
 
   const handleVote = async () => {
-    if (!url || !validationResult?.manifest || !usdcAddress) return;
+    if (!url || !validationResult?.manifest || !initialPrice) return;
     
     try {
       setSubmissionError(null);
@@ -220,13 +139,13 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
         console.warn("Metadata save failed", err);
       }
 
-      // Step 2: Submit to blockchain
+      // Step 2: Submit to blockchain with native CELO
       writeVote({
         address: CONTRACT_ADDRESS,
         abi: MINI_APP_WEEKLY_BETS_ABI,
         functionName: "vote",
         args: [appHash, normalizedUrl],
-        // NO value parameter - contract uses ERC20 transfer
+        value: initialPrice, // Send native CELO
       });
     } catch (error) {
       console.error("Vote failed:", error);
@@ -235,41 +154,22 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   };
 
   const handleSubmit = async () => {
-    if (!url || !validationResult?.manifest || !usdcAddress || !address) return;
+    if (!url || !validationResult?.manifest || !address || !initialPrice) return;
     
     setSubmissionError(null);
 
     // Check balance
-    if (initialPrice !== undefined && balance !== undefined && balance < initialPrice) {
-      const balanceFormatted = tokenDecimals !== undefined
-        ? formatUnits(balance, tokenDecimals)
-        : balance.toString();
-      const requiredFormatted = tokenDecimals !== undefined
-        ? formatUnits(initialPrice, tokenDecimals)
-        : initialPrice.toString();
+    if (balance !== undefined && balance < initialPrice) {
+      const balanceFormatted = formatUnits(balance, 18);
+      const requiredFormatted = formatUnits(initialPrice, 18);
       setSubmissionError(
-        `Insufficient USDC balance. You have ${balanceFormatted} USDC, but need ${requiredFormatted} USDC.`
+        `Insufficient CELO balance. You have ${balanceFormatted} CELO, but need ${requiredFormatted} CELO.`
       );
       return;
     }
 
-    // Check allowance and approve if needed
-    if (needsApproval && initialPrice) {
-      try {
-        writeApproval({
-          address: usdcAddress,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [CONTRACT_ADDRESS, APPROVAL_AMOUNT],
-        });
-      } catch (error) {
-        console.error("Approval failed:", error);
-        setSubmissionError(error instanceof Error ? error.message : "Failed to approve USDC");
-      }
-    } else {
-      // Already approved, proceed with vote
-      handleVote();
-    }
+    // Proceed with vote (no approval needed for native transfers)
+    handleVote();
   };
 
   // Effect to handle post-transaction API call
@@ -289,12 +189,6 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
 
   // Update error state from transaction errors
   useEffect(() => {
-    if (approvalError) {
-      setSubmissionError(approvalError.message || "Approval transaction failed");
-    }
-  }, [approvalError]);
-
-  useEffect(() => {
     if (voteError) {
       setSubmissionError(voteError.message || "Vote transaction failed");
     }
@@ -307,7 +201,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const appDescription = frame?.description || frame?.tagline || "";
   const appIcon = frame?.iconUrl || null;
 
-  const isProcessing = isApproving || isApprovalConfirming || isVoting || isVoteConfirming;
+  const isProcessing = isVoting || isVoteConfirming;
   const hasInsufficientBalance = initialPrice !== undefined && balance !== undefined && balance < initialPrice;
 
   const canSubmit = 
@@ -319,15 +213,12 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
     !hasInsufficientBalance &&
     !isProcessing;
 
-  // Format balance and allowance for display
-  const balanceFormatted = balance !== undefined && tokenDecimals !== undefined
-    ? formatUnits(balance, tokenDecimals)
+  // Format balance and price for display
+  const balanceFormatted = balance !== undefined
+    ? formatUnits(balance, 18)
     : null;
-  const allowanceFormatted = allowance !== undefined && tokenDecimals !== undefined
-    ? formatUnits(allowance, tokenDecimals)
-    : null;
-  const initialPriceFormatted = initialPrice !== undefined && tokenDecimals !== undefined
-    ? formatUnits(initialPrice, tokenDecimals)
+  const initialPriceFormatted = initialPrice !== undefined
+    ? formatUnits(initialPrice, 18)
     : null;
 
   return (
@@ -438,23 +329,17 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           </div>
         )}
 
-        {/* Balance and Allowance Status */}
+        {/* Balance Status */}
         {address && balanceFormatted !== null && (
           <div className="bg-muted/30 rounded-lg border border-border p-3 space-y-1 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">USDC Balance:</span>
-              <span className="font-mono text-foreground font-medium">{balanceFormatted} USDC</span>
+              <span className="text-muted-foreground">CELO Balance:</span>
+              <span className="font-mono text-foreground font-medium">{balanceFormatted} CELO</span>
             </div>
-            {allowanceFormatted !== null && (
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Allowance:</span>
-                <span className="font-mono text-foreground font-medium">{allowanceFormatted} USDC</span>
-              </div>
-            )}
             {initialPriceFormatted && (
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Required:</span>
-                <span className="font-mono text-foreground font-medium">{initialPriceFormatted} USDC</span>
+                <span className="font-mono text-foreground font-medium">{initialPriceFormatted} CELO</span>
               </div>
             )}
           </div>
@@ -484,18 +369,13 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           onClick={handleSubmit}
           className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isApproving || isApprovalConfirming ? (
-            <>
-              <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
-              Approving USDC...
-            </>
-          ) : isVoting || isVoteConfirming ? (
+          {isVoting || isVoteConfirming ? (
             <>
               <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
               Submitting...
             </>
           ) : (
-            "Submit for $1.00"
+            initialPriceFormatted ? `Submit for ${initialPriceFormatted} CELO` : "Submit"
           )}
         </Button>
 

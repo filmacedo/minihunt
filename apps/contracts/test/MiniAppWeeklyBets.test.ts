@@ -7,7 +7,6 @@ import type { Time } from "@nomicfoundation/hardhat-network-helpers/types";
 
 describe("MiniAppWeeklyBets", function () {
   let contract: any;
-  let mockERC20: any;
   let owner: any;
   let protocolRecipient: any;
   let user1: any;
@@ -20,7 +19,7 @@ describe("MiniAppWeeklyBets", function () {
   let time!: Time;
 
   const WEEK_SECONDS = 7n * 24n * 60n * 60n;
-  const INITIAL_PRICE = parseEther("1");
+  const INITIAL_PRICE = parseEther("0.1"); // 0.1 CELO
   const PROTOCOL_FEE = 10n; // 10%
 
   // Helper to create app hash
@@ -50,42 +49,22 @@ describe("MiniAppWeeklyBets", function () {
       await viem.getWalletClients();
     publicClient = await viem.getPublicClient();
 
-    // Deploy mock ERC20 token
-    mockERC20 = await viem.deployContract("MockERC20", [
-      "Celo Dollar",
-      "cUSD",
-    ]);
-
     // Set start time to a past time (allows immediate voting)
     const startTime = BigInt(await time.latest()) - WEEK_SECONDS;
 
-    // Deploy contract with initialPrice (1e18 for 18-decimal tokens in tests)
-    const initialPrice = INITIAL_PRICE; // Use INITIAL_PRICE constant for tests (1e18)
+    // Deploy contract with initialPrice (0.1 CELO = 1e17)
+    const initialPrice = INITIAL_PRICE;
     contract = await viem.deployContract(
       "MiniAppWeeklyBets",
-      [mockERC20.address, protocolRecipient.account.address, startTime, initialPrice],
+      [protocolRecipient.account.address, startTime, initialPrice],
       {}
     );
 
-    // Give users some tokens
-    const tokenAmount = parseEther("10000");
-    for (const user of [user1, user2, user3, user4, user5]) {
-      await mockERC20.write.mint([user.account.address, tokenAmount]);
-    }
-
-    // Approve contract to spend tokens
-    for (const user of [user1, user2, user3, user4, user5]) {
-      await mockERC20.write.approve([contract.address, parseEther("100000")], {
-        account: user.account,
-      });
-    }
+    // Users should already have native CELO from Hardhat accounts
   });
 
   describe("Deployment", function () {
     it("Should set correct initial values", async function () {
-      expect(await contract.read.cUSD()).to.equal(
-        getAddress(mockERC20.address)
-      );
       expect(await contract.read.protocolRecipient()).to.equal(
         getAddress(protocolRecipient.account.address)
       );
@@ -102,19 +81,22 @@ describe("MiniAppWeeklyBets", function () {
       const appHash = getAppHash("https://app1.com");
       const url = "https://app1.com";
 
-      const balanceBefore = await mockERC20.read.balanceOf([
-        user1.account.address,
-      ]);
-
-      await contract.write.vote([appHash, url], {
-        account: user1.account,
+      const balanceBefore = await publicClient.getBalance({
+        address: user1.account.address,
       });
 
-      const balanceAfter = await mockERC20.read.balanceOf([
-        user1.account.address,
-      ]);
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
+      await contract.write.vote([appHash, url], {
+        account: user1.account,
+        value: price,
+      });
 
-      expect(balanceBefore - balanceAfter).to.equal(INITIAL_PRICE);
+      const balanceAfter = await publicClient.getBalance({
+        address: user1.account.address,
+      });
+
+      // Account for gas, so balance decrease should be >= INITIAL_PRICE
+      expect(balanceBefore - balanceAfter >= INITIAL_PRICE).to.be.true;
 
       const votes = await contract.read.getVotesForAppInWeek([
         await contract.read.getCurrentWeek(),
@@ -136,23 +118,30 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       // First vote
+      const price1 = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price1,
       });
 
       // Second vote should cost more (3% increase)
-      const balanceBefore = await mockERC20.read.balanceOf([
-        user2.account.address,
-      ]);
+      const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
+      expect(price2).to.equal(expectedPrice);
+      
+      const balanceBefore = await publicClient.getBalance({
+        address: user2.account.address,
+      });
       await contract.write.vote([appHash, url], {
         account: user2.account,
+        value: price2,
       });
-      const balanceAfter = await mockERC20.read.balanceOf([
-        user2.account.address,
-      ]);
+      const balanceAfter = await publicClient.getBalance({
+        address: user2.account.address,
+      });
 
-      const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
-      expect(balanceBefore - balanceAfter).to.equal(expectedPrice);
+      // Account for gas, so balance decrease should be >= expectedPrice
+      expect(balanceBefore - balanceAfter >= expectedPrice).to.be.true;
     });
 
     it("Should collect protocol fee correctly", async function () {
@@ -160,8 +149,10 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
       const currentWeek = await contract.read.getCurrentWeek();
 
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       const protocolCollected =
@@ -175,8 +166,10 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
       const currentWeek = await contract.read.getCurrentWeek();
 
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       const prizePool = await contract.read.getWeekPrizePool([currentWeek]);
@@ -200,8 +193,10 @@ describe("MiniAppWeeklyBets", function () {
       expect(nextWeek).to.equal(currentWeek + 1n);
 
       // Voting now records in the new week
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       const votes = await contract.read.getVotesForAppInWeek([
@@ -242,26 +237,34 @@ describe("MiniAppWeeklyBets", function () {
 
       // App1: 5 votes (1st place)
       for (let i = 0; i < 5; i++) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user1.account,
+          value: price,
         });
       }
 
       // App2: 3 votes (2nd place)
       for (let i = 0; i < 3; i++) {
+        const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
         await contract.write.vote([app2, "https://app2.com"], {
           account: user2.account,
+          value: price2,
         });
       }
 
       // App3: 1 vote (3rd place)
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app3]);
       await contract.write.vote([app3, "https://app3.com"], {
         account: user3.account,
+        value: price3,
       });
 
       // App4: 1 vote (tied for 3rd)
+      const price4 = await contract.read.getPriceForNextVoteCurrentWeek([app4]);
       await contract.write.vote([app4, "https://app4.com"], {
         account: user4.account,
+        value: price4,
       });
 
       // Finalize week
@@ -287,11 +290,15 @@ describe("MiniAppWeeklyBets", function () {
 
       // Both apps get 3 votes (tie for first)
       for (let i = 0; i < 3; i++) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user1.account,
+          value: price,
         });
+        const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
         await contract.write.vote([app2, "https://app2.com"], {
           account: user2.account,
+          value: price2,
         });
       }
 
@@ -312,14 +319,18 @@ describe("MiniAppWeeklyBets", function () {
 
       // User1 votes for winning app
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // User2 votes for losing app
       const app2 = getAppHash("https://app2.com");
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user2.account,
+        value: price2,
       });
 
       // Finalize week
@@ -329,15 +340,15 @@ describe("MiniAppWeeklyBets", function () {
       await contract.write.finalizeCurrentWeek();
 
       // User1 should be able to claim
-      const balanceBefore = await mockERC20.read.balanceOf([
+      const balanceBefore = await publicClient.getBalance({ address: 
         user1.account.address,
-      ]);
+       });
       await contract.write.claim([currentWeek], {
         account: user1.account,
       });
-      const balanceAfter = await mockERC20.read.balanceOf([
+      const balanceAfter = await publicClient.getBalance({ address: 
         user1.account.address,
-      ]);
+       });
 
       expect(balanceAfter > balanceBefore).to.be.true;
     });
@@ -346,8 +357,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const startTime = await contract.read.startTime();
@@ -371,8 +384,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // Try to claim before finalization - should fail
@@ -387,8 +402,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // Advance time to end of week
@@ -417,14 +434,21 @@ describe("MiniAppWeeklyBets", function () {
       const app2Week0 = getAppHash("https://app2-week0.com");
 
       // User1 votes for app1, User2 votes for app2
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1Week0]);
       await contract.write.vote([app1Week0, "https://app1-week0.com"], {
         account: user1.account,
+        value: price,
       });
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2Week0]);
       await contract.write.vote([app2Week0, "https://app2-week0.com"], {
         account: user2.account,
+        value: price2,
       });
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app1Week0]);
+      const price3Week0 = await contract.read.getPriceForNextVoteCurrentWeek([app1Week0]);
       await contract.write.vote([app1Week0, "https://app1-week0.com"], {
         account: user3.account,
+        value: price3Week0,
       }); // app1 wins
 
       // Finalize week 0
@@ -446,14 +470,20 @@ describe("MiniAppWeeklyBets", function () {
       const app1Week1 = getAppHash("https://app1-week1.com");
       const app2Week1 = getAppHash("https://app2-week1.com");
 
+      const price4 = await contract.read.getPriceForNextVoteCurrentWeek([app1Week1]);
       await contract.write.vote([app1Week1, "https://app1-week1.com"], {
         account: user2.account,
+        value: price4,
       });
+      const price5 = await contract.read.getPriceForNextVoteCurrentWeek([app2Week1]);
       await contract.write.vote([app2Week1, "https://app2-week1.com"], {
         account: user3.account,
+        value: price5,
       });
+      const price6 = await contract.read.getPriceForNextVoteCurrentWeek([app2Week1]);
       await contract.write.vote([app2Week1, "https://app2-week1.com"], {
         account: user4.account,
+        value: price6,
       }); // app2 wins
 
       const week1End = getWeekEnd(currentWeek, startTime);
@@ -475,14 +505,20 @@ describe("MiniAppWeeklyBets", function () {
       const app3Week2 = getAppHash("https://app3-week2.com");
 
       // Create a 3-way tie scenario
+      const price7 = await contract.read.getPriceForNextVoteCurrentWeek([app1Week2]);
       await contract.write.vote([app1Week2, "https://app1-week2.com"], {
         account: user1.account,
+        value: price7,
       });
+      const price8 = await contract.read.getPriceForNextVoteCurrentWeek([app2Week2]);
       await contract.write.vote([app2Week2, "https://app2-week2.com"], {
         account: user2.account,
+        value: price8,
       });
+      const price9 = await contract.read.getPriceForNextVoteCurrentWeek([app3Week2]);
       await contract.write.vote([app3Week2, "https://app3-week2.com"], {
         account: user3.account,
+        value: price9,
       });
 
       const week2End = getWeekEnd(currentWeek, startTime);
@@ -519,21 +555,27 @@ describe("MiniAppWeeklyBets", function () {
 
       // App1: 5 votes (1st)
       for (let i = 0; i < 5; i++) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user1.account,
+          value: price,
         });
       }
 
       // App2: 3 votes (2nd)
       for (let i = 0; i < 3; i++) {
+        const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
         await contract.write.vote([app2, "https://app2.com"], {
           account: user2.account,
+          value: price2,
         });
       }
 
       // App3: 1 vote (3rd)
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app3]);
       await contract.write.vote([app3, "https://app3.com"], {
         account: user3.account,
+        value: price3,
       });
 
       let weekEnd = getWeekEnd(currentWeek, startTime);
@@ -561,17 +603,23 @@ describe("MiniAppWeeklyBets", function () {
 
       // Both app4 and app5 get 3 votes
       for (let i = 0; i < 3; i++) {
+        const price4 = await contract.read.getPriceForNextVoteCurrentWeek([app4]);
         await contract.write.vote([app4, "https://app4.com"], {
           account: user1.account,
+          value: price4,
         });
+        const price5Loop = await contract.read.getPriceForNextVoteCurrentWeek([app5]);
         await contract.write.vote([app5, "https://app5.com"], {
           account: user2.account,
+          value: price5Loop,
         });
       }
 
       // App6: 1 vote (3rd)
+      const price6 = await contract.read.getPriceForNextVoteCurrentWeek([app6]);
       await contract.write.vote([app6, "https://app6.com"], {
         account: user3.account,
+        value: price6,
       });
 
       weekEnd = getWeekEnd(currentWeek, startTime);
@@ -597,14 +645,20 @@ describe("MiniAppWeeklyBets", function () {
 
       // All three get 2 votes
       for (let i = 0; i < 2; i++) {
+        const price7 = await contract.read.getPriceForNextVoteCurrentWeek([app7]);
         await contract.write.vote([app7, "https://app7.com"], {
           account: user1.account,
+          value: price7,
         });
+        const price8 = await contract.read.getPriceForNextVoteCurrentWeek([app8]);
         await contract.write.vote([app8, "https://app8.com"], {
           account: user2.account,
+          value: price8,
         });
+        const price9 = await contract.read.getPriceForNextVoteCurrentWeek([app9]);
         await contract.write.vote([app9, "https://app9.com"], {
           account: user3.account,
+          value: price9,
         });
       }
 
@@ -651,8 +705,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // All users vote for same app
       for (const user of [user1, user2, user3, user4, user5]) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user.account,
+          value: price,
         });
       }
 
@@ -670,8 +726,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const startTime = await contract.read.startTime();
@@ -693,8 +751,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // User1 votes 3 times for same app
       for (let i = 0; i < 3; i++) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user1.account,
+          value: price,
         });
       }
 
@@ -717,11 +777,15 @@ describe("MiniAppWeeklyBets", function () {
       const app1 = getAppHash("https://app1.com");
       const app2 = getAppHash("https://app2.com");
 
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user1.account,
+        value: price2,
       });
 
       const totalVotes = await contract.read.getWeekUserTotalVotes([
@@ -758,8 +822,10 @@ describe("MiniAppWeeklyBets", function () {
       const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const startTime = await contract.read.startTime();
@@ -770,15 +836,15 @@ describe("MiniAppWeeklyBets", function () {
       // Advance past claim deadline
       await time.increase(CLAIM_DEADLINE + 1n);
 
-      const balanceBefore = await mockERC20.read.balanceOf([
+      const balanceBefore = await publicClient.getBalance({ address: 
         protocolRecipient.account.address,
-      ]);
+       });
 
       await contract.write.sweepUnclaimedToProtocol([currentWeek]);
 
-      const balanceAfter = await mockERC20.read.balanceOf([
+      const balanceAfter = await publicClient.getBalance({ address: 
         protocolRecipient.account.address,
-      ]);
+       });
 
       expect(balanceAfter > balanceBefore).to.be.true;
     });
@@ -788,8 +854,10 @@ describe("MiniAppWeeklyBets", function () {
       const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const startTime = await contract.read.startTime();
@@ -813,8 +881,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // Vote in current week
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare1 = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
@@ -829,8 +899,10 @@ describe("MiniAppWeeklyBets", function () {
       const nextWeek = await contract.read.getCurrentWeek();
       
       // Vote in next week
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user2.account,
+        value: price2,
       });
 
       // totalPrizePools should accumulate
@@ -841,8 +913,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
@@ -869,8 +943,10 @@ describe("MiniAppWeeklyBets", function () {
       const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
@@ -900,16 +976,20 @@ describe("MiniAppWeeklyBets", function () {
 
       // Vote in current week
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
       expect(await contract.read.getWeekTotalPrizePool([currentWeek])).to.equal(poolShare);
 
       // Vote again in same week
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user2.account,
+        value: price2,
       });
 
       const secondPrice = (INITIAL_PRICE * 103n) / 100n;
@@ -923,8 +1003,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
@@ -951,8 +1033,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // Vote in week 0
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       const poolShare1 = INITIAL_PRICE - (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
@@ -967,8 +1051,10 @@ describe("MiniAppWeeklyBets", function () {
       const nextWeek = await contract.read.getCurrentWeek();
       
       // Vote in week 1
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user2.account,
+        value: price2,
       });
 
       // Each week should have its own total
@@ -983,34 +1069,53 @@ describe("MiniAppWeeklyBets", function () {
 
       // User1 votes for winning app (app1 will have 3 votes - 1st place)
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user3.account,
+        value: price2,
       });
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user3.account,
+        value: price3,
+      });
+      const price4 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user4.account,
+        value: price4,
       });
 
       // User2 votes for losing app (app2 will have 1 vote - not in top 3)
       const app2 = getAppHash("https://app2.com");
+      const price2App = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user2.account,
+        value: price2App,
       });
 
       // Add apps for 2nd and 3rd place
       const app3 = getAppHash("https://app3.com");
+      const price5 = await contract.read.getPriceForNextVoteCurrentWeek([app3]);
       await contract.write.vote([app3, "https://app3.com"], {
         account: user5.account,
+        value: price5,
       });
+      const price6 = await contract.read.getPriceForNextVoteCurrentWeek([app3]);
       await contract.write.vote([app3, "https://app3.com"], {
         account: user1.account,
+        value: price6,
       }); // app3: 2 votes - 2nd place
 
       const app4 = getAppHash("https://app4.com");
+      const price7 = await contract.read.getPriceForNextVoteCurrentWeek([app4]);
       await contract.write.vote([app4, "https://app4.com"], {
         account: user3.account,
+        value: price7,
       }); // app4: 1 vote - 3rd place (tied with app2, but app4 wins tie-breaker or both get 3rd)
 
       // Finalize week
@@ -1043,19 +1148,25 @@ describe("MiniAppWeeklyBets", function () {
 
       // User1 votes for app1
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // User2 votes for app2
       const app2 = getAppHash("https://app2.com");
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user2.account,
+        value: price2,
       });
 
       // User3 votes for app1 (app1 is winning with 2 votes, app2 is 2nd with 1 vote)
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user3.account,
+        value: price3,
       });
 
       // Week is not finalized yet, but should still return payout
@@ -1092,8 +1203,10 @@ describe("MiniAppWeeklyBets", function () {
       const currentWeek = await contract.read.getCurrentWeek();
 
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // User2 didn't vote
@@ -1109,16 +1222,22 @@ describe("MiniAppWeeklyBets", function () {
 
       // Create scenario with clear winner
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user3.account,
+        value: price2,
       });
 
       const app2 = getAppHash("https://app2.com");
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user2.account,
+        value: price3,
       });
 
       // Finalize week
@@ -1134,9 +1253,9 @@ describe("MiniAppWeeklyBets", function () {
       ]);
 
       // Get balance before claim
-      const balanceBefore = await mockERC20.read.balanceOf([
-        user1.account.address,
-      ]);
+      const balanceBefore = await publicClient.getBalance({
+        address: user1.account.address,
+      });
 
       // Claim
       await contract.write.claim([currentWeek], {
@@ -1144,12 +1263,15 @@ describe("MiniAppWeeklyBets", function () {
       });
 
       // Get balance after claim
-      const balanceAfter = await mockERC20.read.balanceOf([
-        user1.account.address,
-      ]);
+      const balanceAfter = await publicClient.getBalance({
+        address: user1.account.address,
+      });
 
-      // Actual claim should match expected payout
-      expect(balanceAfter - balanceBefore).to.equal(expectedPayout);
+      // Actual claim should match expected payout (account for gas costs)
+      const actualClaim = balanceAfter - balanceBefore;
+      // Allow small difference for gas costs
+      expect(actualClaim >= expectedPayout - parseEther("0.001")).to.be.true;
+      expect(actualClaim <= expectedPayout + parseEther("0.001")).to.be.true;
     });
 
     it("Should update payout calculation as votes change in non-finalized week", async function () {
@@ -1157,8 +1279,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // User1 votes for app1
       const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
       await contract.write.vote([app1, "https://app1.com"], {
         account: user1.account,
+        value: price,
       });
 
       // Initially, user1 should have some payout (app1 is winning)
@@ -1170,8 +1294,10 @@ describe("MiniAppWeeklyBets", function () {
 
       // User2 votes for app2
       const app2 = getAppHash("https://app2.com");
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user2.account,
+        value: price2,
       });
 
       // User1's payout should still be > 0 (app1 still winning)
@@ -1182,8 +1308,10 @@ describe("MiniAppWeeklyBets", function () {
       expect(payout2 > 0n).to.be.true;
 
       // User3 votes for app2 (now app2 is winning)
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
       await contract.write.vote([app2, "https://app2.com"], {
         account: user3.account,
+        value: price3,
       });
 
       // Now user1's payout should be > 0 (app1 is in 2nd place, gets 30% of pool)
@@ -1223,21 +1351,27 @@ describe("MiniAppWeeklyBets", function () {
 
       // App1: 3 votes (1st place)
       for (let i = 0; i < 3; i++) {
+        const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
         await contract.write.vote([app1, "https://app1.com"], {
           account: user1.account,
+          value: price,
         });
       }
 
       // App2: 2 votes (2nd place)
       for (let i = 0; i < 2; i++) {
+        const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
         await contract.write.vote([app2, "https://app2.com"], {
           account: user2.account,
+          value: price2,
         });
       }
 
       // App3: 1 vote (3rd place)
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app3]);
       await contract.write.vote([app3, "https://app3.com"], {
         account: user3.account,
+        value: price3,
       });
 
       // Check payouts for non-finalized week
@@ -1293,14 +1427,16 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
 
       // First vote
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       // Price should increase by 3% (103/100)
       const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
-      const price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
-      expect(price).to.equal(expectedPrice);
+      const priceAfterVote = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfterVote).to.equal(expectedPrice);
 
       // Also test convenience function
       const priceCurrentWeek = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
@@ -1313,28 +1449,34 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
 
       // First vote - price becomes INITIAL_PRICE * 103/100
+      const price1 = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price1,
       });
       let expectedPrice = (INITIAL_PRICE * 103n) / 100n;
-      let price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
-      expect(price).to.equal(expectedPrice);
+      let priceAfter1 = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfter1).to.equal(expectedPrice);
 
       // Second vote - price becomes (INITIAL_PRICE * 103/100) * 103/100
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user2.account,
+        value: price2,
       });
       expectedPrice = (expectedPrice * 103n) / 100n;
-      price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
-      expect(price).to.equal(expectedPrice);
+      const priceAfter2 = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfter2).to.equal(expectedPrice);
 
       // Third vote
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user3.account,
+        value: price3,
       });
       expectedPrice = (expectedPrice * 103n) / 100n;
-      price = await contract.read.getPriceForNextVote([currentWeek, appHash]);
-      expect(price).to.equal(expectedPrice);
+      const priceAfter3 = await contract.read.getPriceForNextVote([currentWeek, appHash]);
+      expect(priceAfter3).to.equal(expectedPrice);
     });
 
     it("Should return initialPrice for new week (price resets)", async function () {
@@ -1343,8 +1485,10 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
 
       // Vote in current week
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       // Price should be increased
@@ -1372,16 +1516,22 @@ describe("MiniAppWeeklyBets", function () {
       const url2 = "https://app2.com";
 
       // Vote for app1 once
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1Hash]);
       await contract.write.vote([app1Hash, url1], {
         account: user1.account,
+        value: price,
       });
 
       // Vote for app2 twice
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2Hash]);
       await contract.write.vote([app2Hash, url2], {
         account: user2.account,
+        value: price2,
       });
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app2Hash]);
       await contract.write.vote([app2Hash, url2], {
         account: user3.account,
+        value: price3,
       });
 
       // App1 price should be INITIAL_PRICE * 103/100
@@ -1389,12 +1539,12 @@ describe("MiniAppWeeklyBets", function () {
       expect(price1).to.equal((INITIAL_PRICE * 103n) / 100n);
 
       // App2 price should be (INITIAL_PRICE * 103/100) * 103/100
-      const price2 = await contract.read.getPriceForNextVote([currentWeek, app2Hash]);
+      const price2After = await contract.read.getPriceForNextVote([currentWeek, app2Hash]);
       const expectedPrice2 = ((INITIAL_PRICE * 103n) / 100n * 103n) / 100n;
-      expect(price2).to.equal(expectedPrice2);
+      expect(price2After).to.equal(expectedPrice2);
 
       // Prices should be different
-      expect(price2 > price1).to.be.true;
+      expect(price2After > price1).to.be.true;
     });
 
     it("Should return correct price for specific week vs current week", async function () {
@@ -1403,8 +1553,10 @@ describe("MiniAppWeeklyBets", function () {
       const url = "https://app1.com";
 
       // Vote in current week
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: price,
       });
 
       const expectedPrice = (INITIAL_PRICE * 103n) / 100n;
@@ -1428,28 +1580,40 @@ describe("MiniAppWeeklyBets", function () {
       expect(priceBefore).to.equal(INITIAL_PRICE);
 
       // Vote and check balance change matches price
-      const balanceBefore = await mockERC20.read.balanceOf([user1.account.address]);
+      const balanceBefore = await publicClient.getBalance({
+        address: user1.account.address,
+      });
       await contract.write.vote([appHash, url], {
         account: user1.account,
+        value: priceBefore,
       });
-      const balanceAfter = await mockERC20.read.balanceOf([user1.account.address]);
+      const balanceAfter = await publicClient.getBalance({
+        address: user1.account.address,
+      });
       const actualCost = balanceBefore - balanceAfter;
 
-      expect(actualCost).to.equal(priceBefore);
+      // Account for gas costs, so actualCost should be >= priceBefore
+      expect(actualCost >= priceBefore).to.be.true;
 
       // Get price for next vote
       const priceAfter = await contract.read.getPriceForNextVote([currentWeek, appHash]);
       expect(priceAfter).to.equal((INITIAL_PRICE * 103n) / 100n);
 
       // Second vote should cost the price we just queried
-      const balanceBefore2 = await mockERC20.read.balanceOf([user2.account.address]);
+      const balanceBefore2 = await publicClient.getBalance({
+        address: user2.account.address,
+      });
       await contract.write.vote([appHash, url], {
         account: user2.account,
+        value: priceAfter,
       });
-      const balanceAfter2 = await mockERC20.read.balanceOf([user2.account.address]);
+      const balanceAfter2 = await publicClient.getBalance({
+        address: user2.account.address,
+      });
       const actualCost2 = balanceBefore2 - balanceAfter2;
 
-      expect(actualCost2).to.equal(priceAfter);
+      // Account for gas costs, so actualCost2 should be >= priceAfter
+      expect(actualCost2 >= priceAfter).to.be.true;
     });
   });
 });

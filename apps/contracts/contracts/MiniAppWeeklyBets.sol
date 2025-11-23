@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /*
   MiniAppWeeklyBets
-  - USDC ERC20 used for payments on Celo Sepolia (constructor arg)
+  - Native CELO/ETH used for payments (no token address needed)
   - Weeks are anchored by `startTime` (should be Monday 00:00 UTC epoch)
   - Voting is only allowed on `currentWeek`. After finalization, currentWeek increments.
   - Finalization can be called by admin or automatically by first claimer (if end time reached).
@@ -11,12 +11,8 @@ pragma solidity ^0.8.20;
   - Payouts to voters proportionally to votes on winning apps.
 */
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract MiniAppWeeklyBets is Ownable {
-    using SafeERC20 for IERC20;
-
     /* ========== CONSTANTS ========== */
     uint256 public constant WEEK_SECONDS = 7 days;
     uint256 public constant PRICE_NUM = 103;      // 3% growth multiplier numerator
@@ -26,7 +22,6 @@ contract MiniAppWeeklyBets is Ownable {
     uint256 public constant CLAIM_DEADLINE = 90 days;
 
     /* ========== IMMUTABLES ========== */
-    IERC20 public immutable cUSD;
     uint256 public immutable startTime; // unix timestamp of week 0 start (Mon 00:00 UTC recommended)
 
     /* ========== STATE ========== */
@@ -84,17 +79,14 @@ contract MiniAppWeeklyBets is Ownable {
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
-        address _cUSD,
         address _protocolRecipient,
         uint256 _startTime,
         uint256 _initialPrice
     ) Ownable(msg.sender) {
-        require(_cUSD != address(0), "cUSD zero");
         require(_protocolRecipient != address(0), "protocol zero");
         require(_startTime > 0, "startTime zero");
         require(_initialPrice > 0, "initialPrice zero");
 
-        cUSD = IERC20(_cUSD);
         protocolRecipient = _protocolRecipient;
         startTime = _startTime;
         initialPrice = _initialPrice;
@@ -126,7 +118,7 @@ contract MiniAppWeeklyBets is Ownable {
      * @param appHash keccak256(normalizedUrl)
      * @param fullUrl normalized full URL (emitted in event for off-chain indexing)
      */
-    function vote(bytes32 appHash, string calldata fullUrl) external {
+    function vote(bytes32 appHash, string calldata fullUrl) external payable {
         if (weekFinalized[currentWeek]) revert VotingClosedForWeek();
 
         // initialize per-app-week info if needed
@@ -141,8 +133,8 @@ contract MiniAppWeeklyBets is Ownable {
 
         uint256 cost = ai.price == 0 ? initialPrice : ai.price;
 
-        // transfer cUSD from user (user must approve first)
-        cUSD.safeTransferFrom(msg.sender, address(this), cost);
+        // Check that user sent enough native currency
+        if (msg.value < cost) revert NotEnoughPayment();
 
         // compute fees
         uint256 protocolFee = (cost * PROTOCOL_FEE_NUM) / PROTOCOL_FEE_DEN;
@@ -152,6 +144,12 @@ contract MiniAppWeeklyBets is Ownable {
         weekPrizePool[currentWeek] += poolShare;
         weekTotalPrizePool[currentWeek] += poolShare;
         totalPrizePools += poolShare;
+
+        // Refund excess if user sent more than required
+        if (msg.value > cost) {
+            (bool success, ) = payable(msg.sender).call{value: msg.value - cost}("");
+            require(success, "Refund failed");
+        }
 
         // mark app as registered globally (persist)
         if (!appRegistered[appHash]) {
@@ -283,7 +281,8 @@ contract MiniAppWeeklyBets is Ownable {
                 payout = pool;
             }
             weekPrizePool[weekIdx] = pool - payout;
-            cUSD.safeTransfer(msg.sender, payout);
+            (bool success, ) = payable(msg.sender).call{value: payout}("");
+            require(success, "Transfer failed");
         }
 
         emit Claimed(weekIdx, msg.sender, payout);
@@ -572,7 +571,8 @@ contract MiniAppWeeklyBets is Ownable {
         weekPrizePool[weekIdx] = 0;
         weekProtocolCollected[weekIdx] = 0;
 
-        cUSD.safeTransfer(protocolRecipient, amount);
+        (bool success, ) = payable(protocolRecipient).call{value: amount}("");
+        require(success, "Transfer failed");
 
         emit SweepToProtocol(weekIdx, amount);
     }
@@ -607,7 +607,7 @@ contract MiniAppWeeklyBets is Ownable {
      * @notice Get the price for the next vote on a specific app in a week.
      * @param weekIdx The week index to check
      * @param appHash The app hash to check
-     * @return The price in cUSD for the next vote (returns initialPrice if app hasn't been voted on yet this week)
+     * @return The price in CELO for the next vote (returns initialPrice if app hasn't been voted on yet this week)
      */
     function getPriceForNextVote(uint256 weekIdx, bytes32 appHash) public view returns (uint256) {
         AppWeekInfo storage ai = weekAppInfo[weekIdx][appHash];
@@ -617,7 +617,7 @@ contract MiniAppWeeklyBets is Ownable {
     /**
      * @notice Get the price for the next vote on a specific app in the current week.
      * @param appHash The app hash to check
-     * @return The price in cUSD for the next vote (returns initialPrice if app hasn't been voted on yet this week)
+     * @return The price in CELO for the next vote (returns initialPrice if app hasn't been voted on yet this week)
      */
     function getPriceForNextVoteCurrentWeek(bytes32 appHash) external view returns (uint256) {
         AppWeekInfo storage ai = weekAppInfo[currentWeek][appHash];
@@ -644,7 +644,7 @@ contract MiniAppWeeklyBets is Ownable {
     /**
      * @notice Get the cumulative total prize pool ever stored for a specific week (never decreases).
      * @param weekIdx The week index to check
-     * @return The cumulative total amount in cUSD that was ever added to this week's prize pool
+     * @return The cumulative total amount in CELO that was ever added to this week's prize pool
      */
     function getWeekTotalPrizePool(uint256 weekIdx) external view returns (uint256) {
         return weekTotalPrizePool[weekIdx];
@@ -667,7 +667,7 @@ contract MiniAppWeeklyBets is Ownable {
      * Works for both finalized and non-finalized weeks, showing current potential winnings.
      * @param weekIdx The week index to check
      * @param voter The address of the voter
-     * @return The payout amount in cUSD (0 if voter didn't vote or not eligible)
+     * @return The payout amount in CELO (0 if voter didn't vote or not eligible)
      */
     // Helper to compute payout for non-finalized week
     function _computePayoutNonFinalized(uint256 weekIdx, address voter, uint256 max1, uint256 max2, uint256 max3) internal view returns (uint256) {
@@ -739,7 +739,7 @@ contract MiniAppWeeklyBets is Ownable {
      * Works for both finalized and non-finalized weeks, showing current potential winnings.
      * @param weekIdx The week index to check
      * @param voter The address of the voter
-     * @return The payout amount in cUSD (0 if voter didn't vote or not eligible)
+     * @return The payout amount in CELO (0 if voter didn't vote or not eligible)
      */
     function getUserPayoutForWeek(uint256 weekIdx, address voter) external view returns (uint256) {
         if (weekUserTotalVotes[weekIdx][voter] == 0) {
