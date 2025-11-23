@@ -41,33 +41,33 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
   }, [week]);
 
   return (
-    <div className="px-4 py-8 text-center space-y-6 border-b border-border bg-background">
-      <h1 className="text-xl leading-tight text-foreground font-semibold">
+    <div className="px-4 sm:px-6 py-6 sm:py-8 text-center space-y-4 sm:space-y-6 border-b border-border bg-background">
+      <h1 className="text-lg sm:text-xl leading-tight text-foreground font-semibold px-2">
         Bet on the best miniapp of the week.
       </h1>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm font-semibold uppercase tracking-wide">
-          <Icons.Trophy className="w-4 h-4" />
-          <span>{weekDates} Prize Pool</span>
+        <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs sm:text-sm font-semibold uppercase tracking-wide">
+          <Icons.Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="whitespace-nowrap">{weekDates} Prize Pool</span>
         </div>
-        <div className="text-5xl font-bold text-foreground tracking-tight font-mono">
+        <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground tracking-tight font-mono break-words px-2">
           {prizePool} CELO
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground overflow-x-auto -mx-4 px-4">
-        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
-          <Icons.Users className="w-4 h-4" />
-          <span>{totalUniqueVoters.toLocaleString()} voters</span>
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-muted/50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-mono">
+          <Icons.Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+          <span className="whitespace-nowrap">{totalUniqueVoters.toLocaleString()} voters</span>
         </div>
-        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
-          <Icons.Users className="w-4 h-4" />
-          <span>{totalVoters.toLocaleString()} votes</span>
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-muted/50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-mono">
+          <Icons.Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+          <span className="whitespace-nowrap">{totalVoters.toLocaleString()} votes</span>
         </div>
-        <div className="inline-flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full font-mono flex-shrink-0">
-          <Icons.Timer className="w-4 h-4" />
-          <span>Ends in: {timeLeft}</span>
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-muted/50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full font-mono">
+          <Icons.Timer className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+          <span className="whitespace-nowrap">Ends in: {timeLeft}</span>
         </div>
       </div>
     </div>

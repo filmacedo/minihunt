@@ -59,12 +59,12 @@ export default function Home() {
       <PrizeBanner week={appsWeek} />
 
       {/* Tabs */}
-      <div className="sticky top-[61px] bg-background z-30 border-b border-border">
+      <div className="sticky top-[57px] sm:top-[61px] bg-background z-30 border-b border-border">
         <div className="grid grid-cols-2 p-1">
           <button
             onClick={() => setActiveTab("apps")}
             className={cn(
-              "py-3 text-sm font-semibold border-b-2 transition-colors",
+              "py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors",
               activeTab === "apps"
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -75,7 +75,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab("hunters")}
             className={cn(
-              "py-3 text-sm font-semibold border-b-2 transition-colors",
+              "py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors",
               activeTab === "hunters"
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -87,7 +87,7 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="px-4 sm:px-6 py-4 space-y-3 sm:space-y-4">
         {activeTab === "apps" ? (
           <div className="space-y-3">
             {appsLoading ? (
@@ -102,11 +102,11 @@ export default function Home() {
               apps.map((entry) => (
                 <div
                   key={entry.miniApp.id}
-                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px]"
+                  className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-card rounded-xl border border-border shadow-sm min-h-[64px] sm:h-[72px]"
                 >
-                  <div className="flex-none w-8 text-center">
+                  <div className="flex-none w-6 sm:w-8 text-center">
                     {entry.rank <= 3 ? (
-                      <span className="text-xl">
+                      <span className="text-lg sm:text-xl">
                         {entry.rank === 1
                           ? "🥇"
                           : entry.rank === 2
@@ -114,19 +114,19 @@ export default function Home() {
                           : "🥉"}
                       </span>
                     ) : (
-                      <span className="text-sm font-bold text-muted-foreground font-mono">
+                      <span className="text-xs sm:text-sm font-bold text-muted-foreground font-mono">
                         #{entry.rank}
                       </span>
                     )}
                   </div>
 
-                  <Avatar className="flex-none w-12 h-12 rounded-lg">
+                  <Avatar className="flex-none w-10 h-10 sm:w-12 sm:h-12 rounded-lg">
                     <AvatarImage
                       src={entry.miniApp.iconUrl || "/placeholder.svg"}
                       alt={entry.miniApp.name || "App"}
                       className="rounded-lg object-cover"
                     />
-                    <AvatarFallback className="rounded-lg bg-muted text-muted-foreground font-semibold">
+                    <AvatarFallback className="rounded-lg bg-muted text-muted-foreground font-semibold text-xs sm:text-sm">
                       {(entry.miniApp.name || "A")
                         .substring(0, 2)
                         .toUpperCase()}
@@ -134,10 +134,10 @@ export default function Home() {
                   </Avatar>
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate text-base">
+                    <h3 className="font-semibold text-foreground truncate text-sm sm:text-base">
                       {entry.miniApp.name || "Untitled App"}
                     </h3>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {entry.miniApp.description || entry.miniApp.frameUrl}
                     </p>
                   </div>
@@ -146,14 +146,14 @@ export default function Home() {
                     <button
                       onClick={() => handleOpenModal("betting", entry.miniApp)}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-0.5 h-12 w-12 rounded-lg border-2 transition-all hover:scale-105 active:scale-95",
+                        "flex flex-col items-center justify-center gap-0.5 h-10 w-10 sm:h-12 sm:w-12 rounded-lg border-2 transition-all hover:scale-105 active:scale-95",
                         entry.totalVotes > 0
                           ? "border-foreground/10 bg-foreground/5 text-foreground dark:border-primary/50 dark:bg-primary/10 dark:text-primary"
                           : "border-border bg-card text-muted-foreground hover:border-foreground/20"
                       )}
                     >
-                      <Icons.ArrowUp className="h-4 w-4" />
-                      <span className="text-xs font-semibold leading-none font-mono">
+                      <Icons.ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-[10px] sm:text-xs font-semibold leading-none font-mono">
                         {entry.totalVotes}
                       </span>
                     </button>
@@ -176,20 +176,20 @@ export default function Home() {
               voters.map((voter, i) => (
                 <div
                   key={voter.fid}
-                  className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-sm h-[72px] w-full"
+                  className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-card rounded-xl border border-border shadow-sm min-h-[64px] sm:h-[72px] w-full"
                 >
-                  <div className="flex-none w-8 text-center">
-                    <span className="text-sm font-bold text-muted-foreground font-mono">
+                  <div className="flex-none w-6 sm:w-8 text-center">
+                    <span className="text-xs sm:text-sm font-bold text-muted-foreground font-mono">
                       #{i + 1}
                     </span>
                   </div>
 
-                  <Avatar className="flex-none w-12 h-12">
+                  <Avatar className="flex-none w-10 h-10 sm:w-12 sm:h-12">
                     <AvatarImage
                       src={voter.user?.profile_image_url || undefined}
                       alt={voter.user?.name || `FID ${voter.fid}`}
                     />
-                    <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
+                    <AvatarFallback className="bg-muted text-muted-foreground font-semibold text-xs sm:text-sm">
                       {voter.user?.name
                         ? voter.user.name.substring(0, 2).toUpperCase()
                         : voter.fid.toString().substring(0, 2)}
@@ -197,10 +197,10 @@ export default function Home() {
                   </Avatar>
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate text-base">
+                    <h3 className="font-semibold text-foreground truncate text-sm sm:text-base">
                       {voter.user?.name || `FID: ${voter.fid}`}
                     </h3>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {voter.user?.bio || (
                         <span className="font-mono">
                           {formatUnits(BigInt(voter.paidAmount), 18)} CELO spent
@@ -210,12 +210,12 @@ export default function Home() {
                   </div>
 
                   <div className="flex-none text-right">
-                    <div className="text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
+                    <div className="text-xs sm:text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
                       {BigInt(voter.earningAmount) > 0n
                         ? `+${formatUnits(BigInt(voter.earningAmount), 18)}`
                         : "-"}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[9px] sm:text-[10px] text-muted-foreground">
                       Est. win
                     </div>
                   </div>
@@ -230,9 +230,9 @@ export default function Home() {
       {activeTab === "apps" && (
         <button
           onClick={() => handleOpenModal("submit")}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-[#E1FF00] text-black rounded-full shadow-lg flex items-center justify-center hover:bg-[#E1FF00]/90 active:scale-95 transition-all z-30"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-[#E1FF00] text-black rounded-full shadow-lg flex items-center justify-center hover:bg-[#E1FF00]/90 active:scale-95 transition-all z-30"
         >
-          <Icons.Plus className="h-6 w-6" />
+          <Icons.Plus className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
       )}
 
