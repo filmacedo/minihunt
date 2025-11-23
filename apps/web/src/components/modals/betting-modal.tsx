@@ -5,7 +5,7 @@ import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { MiniApp } from "@/lib/types";
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance } from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance, useConnect } from "wagmi";
 import { formatUnits } from "viem";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
@@ -25,7 +25,8 @@ interface BettingModalProps {
 export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalProps) {
   const { context } = useMiniApp();
   const { post } = useApi();
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
   const [priceChanged, setPriceChanged] = useState(false);
   const [bettingError, setBettingError] = useState<string | null>(null);
   const previousPriceRef = useRef<bigint | null>(null);
@@ -44,13 +45,13 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   const balance = balanceData?.value;
 
   // Read price from contract with 5 second polling
-  // Celo Sepolia chainId: 11142220
+  // Celo Mainnet chainId: 42220
   const { data: price, error: priceError } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: MINI_APP_WEEKLY_BETS_ABI,
     functionName: 'getPriceForNextVoteCurrentWeek',
     args: appHash ? [appHash] : undefined,
-    chainId: 11142220, // Celo Sepolia
+    chainId: 42220, // Celo Mainnet
     query: {
       enabled: !!appHash && isOpen && !!CONTRACT_ADDRESS,
       refetchInterval: 5000, // Refetch every 5 seconds
@@ -90,9 +91,11 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
 
   const { 
     isLoading: isVoteConfirming, 
-    isSuccess: isVoteSuccess 
+    isSuccess: isVoteSuccess,
+    data: receipt
   } = useWaitForTransactionReceipt({
     hash: voteHash,
+    confirmations: 3, // Wait for 3 confirmations
   });
   
   // Format price for display (CELO has 18 decimals)
@@ -111,6 +114,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         functionName: 'vote',
         args: [appHash, normalizedUrl],
         value: priceBigInt, // Send native CELO
+        chainId: 42220, // Celo Mainnet
       });
     } catch (error) {
       console.error("Vote failed:", error);
@@ -120,9 +124,25 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
 
   // Handle bet button click
   const handleBet = () => {
-    if (!app || !appHash || !priceBigInt || !address) return;
+    if (!app || !appHash || !priceBigInt) return;
     
     setBettingError(null);
+
+    // Check if wallet is connected, connect if not
+    if (!isConnected) {
+      const connector = connectors[0];
+      if (connector) {
+        connect({ connector });
+      } else {
+        setBettingError("Wallet connector not available");
+      }
+      return;
+    }
+
+    if (!address) {
+      setBettingError("Wallet address not available");
+      return;
+    }
 
     // Check balance
     if (balance !== undefined && balance < priceBigInt) {
@@ -138,9 +158,10 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
     handleVote();
   };
 
-  // Effect to handle post-transaction API call
+  // Effect to handle post-transaction API call (only after 3 confirmations)
   useEffect(() => {
-    if (isVoteSuccess && voteHash && context?.user?.fid) {
+    if (isVoteSuccess && receipt && voteHash && context?.user?.fid) {
+      // Only proceed if we have 3 confirmations (receipt means confirmations are met)
       post("/api/miniapps/vote", {
         tx_hash: voteHash,
         fid: context.user.fid
@@ -152,7 +173,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         onSuccess();
       });
     }
-  }, [isVoteSuccess, voteHash, context, post, onSuccess]);
+  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess]);
 
   // Update error state from transaction errors
   useEffect(() => {
@@ -214,12 +235,17 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         disabled={
           isVoting || 
           isVoteConfirming || 
+          isConnecting ||
           !priceBigInt || 
-          !appHash || 
-          !address
+          !appHash
         }
       >
-        {isVoting ? (
+        {isConnecting ? (
+          <>
+            <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+            Connecting Wallet...
+          </>
+        ) : isVoting ? (
           <>
             <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
             Confirm in Wallet...
@@ -227,8 +253,10 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         ) : isVoteConfirming ? (
           <>
             <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
+            Waiting for confirmations...
           </>
+        ) : !isConnected ? (
+          "Connect Wallet to Bet"
         ) : (
           `Bet ${priceFormatted} CELO`
         )}

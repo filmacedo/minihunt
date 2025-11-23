@@ -5,7 +5,7 @@ import { ModalWrapper } from "./modal-wrapper";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance } from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance, useConnect } from "wagmi";
 import { formatUnits } from "viem";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
@@ -37,7 +37,8 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   
   const { context } = useMiniApp();
   const { post } = useApi();
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending: isConnecting } = useConnect();
   
   // Read native CELO balance
   const { data: balanceData } = useBalance({
@@ -68,9 +69,11 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
 
   const { 
     isLoading: isVoteConfirming, 
-    isSuccess: isVoteSuccess 
+    isSuccess: isVoteSuccess,
+    data: receipt
   } = useWaitForTransactionReceipt({
     hash: voteHash,
+    confirmations: 3, // Wait for 3 confirmations
   });
 
   // Debounced validation effect
@@ -146,6 +149,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
         functionName: "vote",
         args: [appHash, normalizedUrl],
         value: initialPrice, // Send native CELO
+        chainId: 42220, // Celo Mainnet
       });
     } catch (error) {
       console.error("Vote failed:", error);
@@ -154,9 +158,25 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   };
 
   const handleSubmit = async () => {
-    if (!url || !validationResult?.manifest || !address || !initialPrice) return;
+    if (!url || !validationResult?.manifest || !initialPrice) return;
     
     setSubmissionError(null);
+
+    // Check if wallet is connected, connect if not
+    if (!isConnected) {
+      const connector = connectors[0];
+      if (connector) {
+        connect({ connector });
+      } else {
+        setSubmissionError("Wallet connector not available");
+      }
+      return;
+    }
+
+    if (!address) {
+      setSubmissionError("Wallet address not available");
+      return;
+    }
 
     // Check balance
     if (balance !== undefined && balance < initialPrice) {
@@ -172,9 +192,10 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
     handleVote();
   };
 
-  // Effect to handle post-transaction API call
+  // Effect to handle post-transaction API call (only after 3 confirmations)
   useEffect(() => {
-    if (isVoteSuccess && voteHash && context?.user?.fid) {
+    if (isVoteSuccess && receipt && voteHash && context?.user?.fid) {
+      // Only proceed if we have 3 confirmations (receipt means confirmations are met)
       post("/api/miniapps/vote", {
         tx_hash: voteHash,
         fid: context.user.fid
@@ -185,7 +206,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
         onSuccess();
       });
     }
-  }, [isVoteSuccess, voteHash, context, post, onSuccess]);
+  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess]);
 
   // Update error state from transaction errors
   useEffect(() => {
@@ -201,7 +222,7 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
   const appDescription = frame?.description || frame?.tagline || "";
   const appIcon = frame?.iconUrl || null;
 
-  const isProcessing = isVoting || isVoteConfirming;
+  const isProcessing = isVoting || isVoteConfirming || isConnecting;
   const hasInsufficientBalance = initialPrice !== undefined && balance !== undefined && balance < initialPrice;
 
   const canSubmit = 
@@ -369,11 +390,23 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
           onClick={handleSubmit}
           className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isVoting || isVoteConfirming ? (
+          {isConnecting ? (
             <>
               <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
-              Submitting...
+              Connecting Wallet...
             </>
+          ) : isVoting ? (
+            <>
+              <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+              Confirm in Wallet...
+            </>
+          ) : isVoteConfirming ? (
+            <>
+              <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+              Waiting for confirmations...
+            </>
+          ) : !isConnected ? (
+            "Connect Wallet to Submit"
           ) : (
             initialPriceFormatted ? `Submit for ${initialPriceFormatted} CELO` : "Submit"
           )}
