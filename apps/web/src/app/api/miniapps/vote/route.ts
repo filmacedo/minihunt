@@ -13,7 +13,7 @@ import { fetchFarcasterManifest } from "@/lib/miniapp-utils";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
-// Chain configurations
+// Celo Mainnet chain configuration
 const celoMainnet = {
   id: 42220,
   name: "Celo",
@@ -39,64 +39,12 @@ const celoMainnet = {
   },
 } as const;
 
-const celoSepolia = {
-  id: 11142220,
-  name: "Celo Sepolia",
-  network: "celo-sepolia",
-  nativeCurrency: {
-    decimals: 18,
-    name: "CELO",
-    symbol: "CELO",
-  },
-  rpcUrls: {
-    default: {
-      http: [env.CELO_RPC_URL],
-    },
-    public: {
-      http: [env.CELO_RPC_URL],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: "Blockscout",
-      url: "https://celo-sepolia.blockscout.com",
-    },
-  },
-} as const;
-
 const contractAddress = env.MINI_APP_WEEKLY_BETS_ADDRESS as Address;
 
-// Create a client without chain to detect it dynamically
-const baseClient = createPublicClient({
+const publicClient = createPublicClient({
   transport: http(env.CELO_RPC_URL),
+  chain: celoMainnet,
 });
-
-// Function to detect chain ID and create appropriate client
-async function getPublicClient() {
-  try {
-    const chainId = await baseClient.getChainId();
-    
-    // Determine which chain config to use based on detected chain ID
-    const chain = chainId === 11142220 ? celoSepolia : celoMainnet;
-    
-    // Log for debugging (only in non-production to avoid exposing RPC URL)
-    if (process.env.NEXT_PUBLIC_APP_ENV !== "production") {
-      console.log(`Detected chain ID: ${chainId}, using ${chain.name}`);
-    }
-    
-    return createPublicClient({
-      transport: http(env.CELO_RPC_URL),
-      chain,
-    });
-  } catch (error) {
-    console.error("Failed to detect chain ID, defaulting to mainnet:", error);
-    // Default to mainnet if detection fails
-    return createPublicClient({
-      transport: http(env.CELO_RPC_URL),
-      chain: celoMainnet,
-    });
-  }
-}
 
 const client = getSupabaseServerClient();
 
@@ -130,42 +78,8 @@ export async function POST(request: Request) {
     const { tx_hash, fid } = validation.data;
     const txHash = tx_hash as Hash;
 
-    // Get the public client with detected chain
-    const publicClient = await getPublicClient();
-
-    // Wait for transaction receipt with confirmations
-    // This ensures the transaction is included in a block and has confirmations
-    let receipt;
-    try {
-      receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
-        confirmations: 3, // Wait for 3 confirmations to ensure transaction is finalized
-        timeout: 120_000, // 2 minute timeout
-      });
-    } catch (error) {
-      // If transaction receipt not found, it might still be pending or on wrong network
-      if (error instanceof Error) {
-        const errorMessage = error.message.toLowerCase();
-        if (errorMessage.includes("transaction receipt")) {
-          // Check if it might be a network mismatch
-          const rpcUrl = env.CELO_RPC_URL || "";
-          const isSepolia = rpcUrl.includes("sepolia") || rpcUrl.includes("testnet");
-          const networkHint = isSepolia 
-            ? " (Note: RPC URL appears to be Sepolia testnet)" 
-            : " (Note: RPC URL appears to be mainnet)";
-          
-          return NextResponse.json(
-            { 
-              error: "Transaction receipt not found. The transaction may still be pending, or it may be on a different network." + networkHint,
-              details: error.message,
-              rpcUrl: rpcUrl.substring(0, 50) + "..." // Log partial RPC URL for debugging
-            },
-            { status: 404 }
-          );
-        }
-      }
-      throw error;
-    }
+    // Get transaction receipt
+    const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
 
     if (!receipt) {
       return NextResponse.json(
