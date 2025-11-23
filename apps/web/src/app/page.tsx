@@ -9,7 +9,7 @@ import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useVotersLeaderboard } from "@/hooks/use-voters-leaderboard";
 import { MiniApp } from "@/lib/types";
-import { formatUnits } from "viem";
+import { formatUnitsFixed } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ export default function Home() {
 
       {/* Tabs */}
       <div className="sticky top-[57px] sm:top-[61px] bg-background z-30 border-b border-border">
-        <div className="grid grid-cols-2 p-1">
+        <div className="grid grid-cols-2">
           <button
             onClick={() => setActiveTab("apps")}
             className={cn(
@@ -203,7 +203,7 @@ export default function Home() {
                     <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {voter.user?.bio || (
                         <span className="font-mono">
-                          {formatUnits(BigInt(voter.paidAmount), 18)} CELO spent
+                          {formatUnitsFixed(BigInt(voter.paidAmount), 18)} CELO spent
                         </span>
                       )}
                     </p>
@@ -212,7 +212,7 @@ export default function Home() {
                   <div className="flex-none text-right">
                     <div className="text-xs sm:text-sm font-bold text-foreground dark:text-[#E1FF00] font-mono">
                       {BigInt(voter.earningAmount) > 0n
-                        ? `+${formatUnits(BigInt(voter.earningAmount), 18)}`
+                        ? `+${formatUnitsFixed(BigInt(voter.earningAmount), 18)}`
                         : "-"}
                     </div>
                     <div className="text-[9px] sm:text-[10px] text-muted-foreground">

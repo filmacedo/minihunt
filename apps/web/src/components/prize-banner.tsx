@@ -1,6 +1,6 @@
 import { Icons } from "@/components/ui/icons";
 import { WeekData } from "@/lib/types";
-import { formatUnits } from "viem";
+import { formatUnitsFixed } from "@/lib/utils";
 import { useMemo } from "react";
 
 interface PrizeBannerProps {
@@ -24,7 +24,7 @@ export function PrizeBanner({ week }: PrizeBannerProps) {
   }, [week]);
 
   // CELO has 18 decimals
-  const prizePool = week ? formatUnits(BigInt(week.prizePool), 18) : "0";
+  const prizePool = week ? formatUnitsFixed(BigInt(week.prizePool), 18) : "0.00";
   const totalVoters = week ? parseInt(week.totalVoters, 10) : 0;
   const totalUniqueVoters = week ? parseInt(week.totalUniqueVoters, 10) : 0;
 

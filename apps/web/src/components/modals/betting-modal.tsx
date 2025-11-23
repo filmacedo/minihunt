@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { MiniApp } from "@/lib/types";
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance, useConnect } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnitsFixed } from "@/lib/utils";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
 import { normalizeUrl } from "@/lib/miniapp-utils";
@@ -85,7 +85,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
   
   // Format price for display (CELO has 18 decimals)
   const priceBigInt = price as bigint | undefined;
-  const priceFormatted = priceBigInt ? formatUnits(priceBigInt, 18) : "0";
+  const priceFormatted = priceBigInt ? formatUnitsFixed(priceBigInt, 18) : "0.00";
 
   // Handle vote transaction
   const handleVote = () => {
@@ -131,8 +131,8 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
 
     // Check balance
     if (balance !== undefined && balance < priceBigInt) {
-      const balanceFormatted = formatUnits(balance, 18);
-      const requiredFormatted = formatUnits(priceBigInt, 18);
+      const balanceFormatted = formatUnitsFixed(balance, 18);
+      const requiredFormatted = formatUnitsFixed(priceBigInt, 18);
       setBettingError(
         `Insufficient CELO balance. You have ${balanceFormatted} CELO, but need ${requiredFormatted} CELO.`
       );

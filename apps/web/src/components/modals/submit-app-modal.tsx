@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/ui/icons";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount, useBalance, useConnect } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnitsFixed } from "@/lib/utils";
 import { useApi } from "@/hooks/use-api";
 import { useMiniApp } from "@/contexts/miniapp-context";
 import { type FarcasterManifest, normalizeUrl } from "@/lib/miniapp-utils";
@@ -183,8 +183,8 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
 
     // Check balance
     if (balance !== undefined && balance < initialPrice) {
-      const balanceFormatted = formatUnits(balance, 18);
-      const requiredFormatted = formatUnits(initialPrice, 18);
+      const balanceFormatted = formatUnitsFixed(balance, 18);
+      const requiredFormatted = formatUnitsFixed(initialPrice, 18);
       setSubmissionError(
         `Insufficient CELO balance. You have ${balanceFormatted} CELO, but need ${requiredFormatted} CELO.`
       );
@@ -296,10 +296,10 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
 
   // Format balance and price for display
   const balanceFormatted = balance !== undefined
-    ? formatUnits(balance, 18)
+    ? formatUnitsFixed(balance, 18)
     : null;
   const initialPriceFormatted = initialPrice !== undefined
-    ? formatUnits(initialPrice, 18)
+    ? formatUnitsFixed(initialPrice, 18)
     : null;
 
   return (
