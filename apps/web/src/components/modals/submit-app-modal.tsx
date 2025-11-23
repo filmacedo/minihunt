@@ -13,6 +13,8 @@ import { type FarcasterManifest, normalizeUrl } from "@/lib/miniapp-utils";
 import { calculateAppHash } from "@/lib/app-utils";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { cn } from "@/lib/utils";
+import { sdk } from "@farcaster/frame-sdk";
+import { env } from "@/lib/env";
 
 interface SubmitAppModalProps {
   onClose: () => void;
@@ -199,14 +201,33 @@ export function SubmitAppModal({ onClose, onSuccess, isOpen }: SubmitAppModalPro
       post("/api/miniapps/vote", {
         tx_hash: voteHash,
         fid: context.user.fid
-      }).then(() => {
+      }).then(async () => {
+        // Prompt user to cast after successful API call
+        try {
+          const appUrl = env.NEXT_PUBLIC_URL;
+          const frame = validationResult?.manifest?.frame || validationResult?.manifest?.miniapp;
+          const submittedAppName = frame?.name || "a new MiniApp";
+          const text = `I just submitted ${submittedAppName} to MiniHunt! 🚀\n\nCheck it out: ${appUrl}`;
+          
+          // Include app image URL if available, otherwise just the app URL
+          const imageUrl = frame?.imageUrl || frame?.iconUrl;
+          const embeds = imageUrl 
+            ? [appUrl, imageUrl] as [string, string]
+            : [appUrl] as [string];
+          
+          await sdk.actions.composeCast({ text, embeds });
+        } catch (err) {
+          console.error("Failed to prompt cast", err);
+          // Don't block success callback if cast prompt fails
+        }
+        
         onSuccess();
       }).catch((err) => {
         console.error("Vote indexing failed", err);
         onSuccess();
       });
     }
-  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess]);
+  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess, validationResult]);
 
   // Update error state from transaction errors
   useEffect(() => {

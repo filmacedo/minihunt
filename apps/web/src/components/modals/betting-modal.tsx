@@ -12,6 +12,8 @@ import { useMiniApp } from "@/contexts/miniapp-context";
 import { normalizeUrl } from "@/lib/miniapp-utils";
 import { calculateAppHash } from "@/lib/app-utils";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
+import { sdk } from "@farcaster/frame-sdk";
+import { env } from "@/lib/env";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MINI_APP_WEEKLY_BETS_ADDRESS as `0x${string}`;
 
@@ -165,7 +167,25 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
       post("/api/miniapps/vote", {
         tx_hash: voteHash,
         fid: context.user.fid
-      }).then(() => {
+      }).then(async () => {
+        // Prompt user to cast after successful API call
+        try {
+          const appUrl = env.NEXT_PUBLIC_URL;
+          const appName = app?.name || "this MiniApp";
+          const text = `I just bet on ${appName} on MiniHunt! 🎯\n\nCheck it out: ${appUrl}`;
+          
+          // Include app image URL if available, otherwise just the app URL
+          const imageUrl = app?.imageUrl || app?.iconUrl;
+          const embeds = imageUrl 
+            ? [appUrl, imageUrl] as [string, string]
+            : [appUrl] as [string];
+          
+          await sdk.actions.composeCast({ text, embeds });
+        } catch (err) {
+          console.error("Failed to prompt cast", err);
+          // Don't block success callback if cast fails
+        }
+        
         onSuccess();
       }).catch((err) => {
         console.error("Vote indexing failed", err);
@@ -173,7 +193,7 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
         onSuccess();
       });
     }
-  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess]);
+  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess, app]);
 
   // Update error state from transaction errors
   useEffect(() => {
