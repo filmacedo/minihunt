@@ -292,8 +292,14 @@ async function deploy() {
     // Build command for Hardhat Ignition
     let baseCommand = `hardhat ignition deploy ignition/modules/MiniAppWeeklyBets.ts --network ${network}`;
     
+    // Format initialPrice as bigint string for Hardhat Ignition (required for large numbers)
+    // Hardhat Ignition requires bigint notation: "100000000000000000n"
+    // We need to pass it as a string value in JSON: "initialPrice":"100000000000000000n"
+    const initialPriceBigint = `${initialPrice}n`;
+    
     // Add parameters (always include protocolRecipient to avoid m.getAccount(0) issue)
-    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"protocolRecipient":"${protocolRecipient}","startTime":${startTime},"initialPrice":${initialPrice}}}'`;
+    // Manually construct JSON to preserve bigint notation as a string value
+    baseCommand += ` --parameters '{"MiniAppWeeklyBetsModule":{"protocolRecipient":"${protocolRecipient}","startTime":${startTime},"initialPrice":"${initialPriceBigint}"}}'`;
 
     // Reset deployment if requested
     if (args.reset) {
@@ -320,7 +326,7 @@ async function deploy() {
       MiniAppWeeklyBetsModule: {
         protocolRecipient,
         startTime,
-        initialPrice
+        initialPrice: initialPriceBigint
       }
     }, null, 2)}`);
     console.log(`   - Protocol recipient format: ${protocolRecipient.startsWith("0x") ? "✅ Has 0x" : "❌ Missing 0x"}`);
