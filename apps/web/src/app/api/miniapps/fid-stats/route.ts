@@ -266,13 +266,12 @@ export async function GET(request: Request) {
       const isWithinDeadline = now < deadline;
       const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      // Compare week IDs as strings to ensure proper matching
-      const weekIdStr = week.id.toString();
-      const currentWeekIdStr = currentWeek.id.toString();
-      const isCurrentWeek = weekIdStr === currentWeekIdStr;
+      // Compare by week index (calculated from start_time) not database ID
+      // This ensures we correctly identify the current week even if database IDs differ
+      const isCurrentWeek = weekIndex === currentWeekIndex;
 
       return {
-        weekId: weekIdStr,
+        weekId: weekId,
         weekIndex: weekIndex.toString(),
         startTime: week.start_time,
         endTime: week.end_time,

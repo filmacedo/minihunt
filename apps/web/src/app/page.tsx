@@ -62,13 +62,17 @@ export default function Home() {
       if (found) return found;
     }
     
-    // Otherwise, default to current week
+    // Otherwise, default to current week (use isCurrentWeek flag from API)
+    const currentWeek = weeks.find((w) => w.isCurrentWeek);
+    if (currentWeek) return currentWeek;
+    
+    // Fallback: try to find by currentWeekIndex if isCurrentWeek flag is missing
     if (currentWeekIndex) {
-      const currentWeek = weeks.find((w) => w.weekIndex === currentWeekIndex);
-      if (currentWeek) return currentWeek;
+      const weekByIndex = weeks.find((w) => w.weekIndex === currentWeekIndex);
+      if (weekByIndex) return weekByIndex;
     }
     
-    // Fallback to first week (most recent)
+    // Last resort: first week (most recent)
     return weeks[0] || null;
   }, [weeks, selectedWeekIndex, currentWeekIndex]);
 
