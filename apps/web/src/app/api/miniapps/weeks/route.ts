@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
         if (!earningsError && earnings) {
           earnings.forEach((earning) => {
-            if (earning.earning_amount && BigInt(earning.earning_amount) > 0n) {
+            if (earning.earning_amount && earning.week_id && BigInt(earning.earning_amount) > 0n) {
               weeksWithRewards.add(earning.week_id.toString());
             }
           });
