@@ -11,10 +11,11 @@ We need to add a way to implement for users to claim the missing amounts from la
    - ✅ Use week index directly (0, 1, 2, ...) from the contract
    - **Commit**: `d151d68` - feat: add week navigation in PrizeBanner and skip Farcaster redirect in dev
 
-2. **Unclaimed Weeks List in "My Bets" Page**
-   - Add claim buttons to each past week card in the existing list
-   - Show claim button only for weeks where user has rewards
-   - Display weeks that are finalized and within the 90-day claim window
+2. ✅ **Unclaimed Weeks List in "My Bets" Page** - *Completed*
+   - ✅ Add claim buttons to each past week card in the existing list
+   - ✅ Show claim button only for weeks where user has rewards
+   - ✅ Display weeks that are finalized and within the 90-day claim window
+   - **Commit**: `407b3a4` - feat: add claim buttons to past week cards in My Bets page
 
 3. **Claim Button Implementation**
    - Call the smart contract `claim(uint256 weekIdx)` method
