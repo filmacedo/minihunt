@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUserVotes } from "@/hooks/use-user-votes";
 import { formatUnitsFixed } from "@/lib/utils";
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect, connectors } from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect } from "wagmi";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { useApi } from "@/hooks/use-api";
 
@@ -39,7 +39,7 @@ interface ClaimButtonProps {
 
 function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, onClaimError }: ClaimButtonProps) {
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { connect, connectors } = useConnect();
   const { context } = useMiniApp();
   const { post } = useApi();
   const [claimError, setClaimError] = useState<string | null>(null);
