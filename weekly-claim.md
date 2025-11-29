@@ -4,11 +4,12 @@ We need to add a way to implement for users to claim the missing amounts from la
 
 ### Implementation
 
-1. **Week Navigation in Header (PrizeBanner)**
-   - Add left and right arrow buttons in the PrizeBanner component
-   - Allow users to navigate through all past weeks
-   - Show all weeks but highlight those where the user has rewards
-   - Use week index directly (0, 1, 2, ...) from the contract
+1. ✅ **Week Navigation in Header (PrizeBanner)** - *Completed*
+   - ✅ Add left and right arrow buttons in the PrizeBanner component
+   - ✅ Allow users to navigate through all past weeks
+   - ✅ Show all weeks but highlight those where the user has rewards
+   - ✅ Use week index directly (0, 1, 2, ...) from the contract
+   - **Commit**: `d151d68` - feat: add week navigation in PrizeBanner and skip Farcaster redirect in dev
 
 2. **Unclaimed Weeks List in "My Bets" Page**
    - Add claim buttons to each past week card in the existing list
