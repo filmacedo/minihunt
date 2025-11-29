@@ -23,36 +23,37 @@ export default function Home() {
   // Fetch all weeks
   const { weeks, currentWeekIndex } = useWeeks(userFid);
 
-  // State for selected week - initialize with current week index if available
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState<string | null>(currentWeekIndex || null);
+  // State for selected week - initialize as null, will be set to current week when available
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<string | null>(null);
 
-  // Set initial selected week to current week (update when currentWeekIndex becomes available)
+  // Set initial selected week to current week when weeks load
   useEffect(() => {
-    if (currentWeekIndex && !selectedWeekIndex) {
-      setSelectedWeekIndex(currentWeekIndex);
-    }
-    // Also update if currentWeekIndex changes and we don't have a selection yet
-    if (currentWeekIndex && selectedWeekIndex === null) {
-      setSelectedWeekIndex(currentWeekIndex);
-    }
-  }, [currentWeekIndex, selectedWeekIndex]);
-
-  // Ensure we default to current week when weeks load
-  useEffect(() => {
-    if (weeks.length > 0 && currentWeekIndex && !selectedWeekIndex) {
-      setSelectedWeekIndex(currentWeekIndex);
-    }
-    // Also update if selected week doesn't exist in weeks array
-    if (weeks.length > 0 && selectedWeekIndex) {
-      const found = weeks.find((w) => w.weekIndex === selectedWeekIndex);
-      if (!found && currentWeekIndex) {
-        setSelectedWeekIndex(currentWeekIndex);
+    if (weeks.length > 0) {
+      // First, try to find week with isCurrentWeek flag
+      const currentWeek = weeks.find((w) => w.isCurrentWeek);
+      if (currentWeek) {
+        // Only set if we don't have a selection or if current selection is not the current week
+        if (!selectedWeekIndex || selectedWeekIndex !== currentWeek.weekIndex) {
+          setSelectedWeekIndex(currentWeek.weekIndex);
+        }
+        return;
+      }
+      // Fallback to currentWeekIndex if available
+      if (currentWeekIndex) {
+        const weekByIndex = weeks.find((w) => w.weekIndex === currentWeekIndex);
+        if (weekByIndex) {
+          // Only set if we don't have a selection or if current selection is not the current week
+          if (!selectedWeekIndex || selectedWeekIndex !== currentWeekIndex) {
+            setSelectedWeekIndex(currentWeekIndex);
+          }
+          return;
+        }
       }
     }
   }, [weeks, currentWeekIndex, selectedWeekIndex]);
 
   // Get selected week's start time for leaderboard
-  // Default to current week if no selection or if selected week not found
+  // Always default to current week if no selection or if selected week not found
   const selectedWeek = useMemo(() => {
     if (!weeks.length) return null;
     
@@ -62,7 +63,7 @@ export default function Home() {
       if (found) return found;
     }
     
-    // Otherwise, default to current week (use isCurrentWeek flag from API)
+    // Always default to current week (use isCurrentWeek flag from API)
     const currentWeek = weeks.find((w) => w.isCurrentWeek);
     if (currentWeek) return currentWeek;
     
@@ -72,7 +73,7 @@ export default function Home() {
       if (weekByIndex) return weekByIndex;
     }
     
-    // Last resort: first week (most recent)
+    // Last resort: first week (most recent) - but this should rarely happen
     return weeks[0] || null;
   }, [weeks, selectedWeekIndex, currentWeekIndex]);
 
