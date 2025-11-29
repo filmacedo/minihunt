@@ -37,34 +37,59 @@ interface ClaimButtonProps {
 function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, onClaimError }: ClaimButtonProps) {
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const { 
     data: claimHash, 
     isPending: isWriting, 
     writeContract: writeClaim,
-    error: claimError,
+    error: writeError,
+    reset: resetWrite,
   } = useWriteContract();
 
   const { 
     isLoading: isConfirming, 
     isSuccess: isClaimSuccess,
+    error: receiptError,
   } = useWaitForTransactionReceipt({
     hash: claimHash,
     confirmations: 3,
   });
 
+  // Clear error when starting a new claim
   useEffect(() => {
-    if (isClaimSuccess) {
-      onClaimSuccess();
+    if (isWriting) {
+      setClaimError(null);
     }
-  }, [isClaimSuccess, onClaimSuccess]);
+  }, [isWriting]);
 
+  // Handle successful claim
   useEffect(() => {
-    if (claimError) {
-      console.error("Claim error:", claimError);
+    if (isClaimSuccess && claimHash) {
+      onClaimSuccess();
+      setClaimError(null);
+    }
+  }, [isClaimSuccess, claimHash, onClaimSuccess]);
+
+  // Handle write errors
+  useEffect(() => {
+    if (writeError) {
+      const errorMessage = writeError.message || "Failed to initiate claim transaction";
+      setClaimError(errorMessage);
+      console.error("Claim write error:", writeError);
       onClaimError();
     }
-  }, [claimError, onClaimError]);
+  }, [writeError, onClaimError]);
+
+  // Handle receipt errors (transaction failed after being sent)
+  useEffect(() => {
+    if (receiptError) {
+      const errorMessage = receiptError.message || "Transaction failed";
+      setClaimError(errorMessage);
+      console.error("Claim receipt error:", receiptError);
+      onClaimError();
+    }
+  }, [receiptError, onClaimError]);
 
   const handleClaim = () => {
     if (!isConnected) {
@@ -91,18 +116,26 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
       return;
     }
 
+    setClaimError(null);
     onClaimStart();
-    writeClaim({
-      address: CONTRACT_ADDRESS,
-      abi: MINI_APP_WEEKLY_BETS_ABI,
-      functionName: 'claim',
-      args: [BigInt(week.weekIndex)],
-      chainId: 42220,
-    });
+    try {
+      writeClaim({
+        address: CONTRACT_ADDRESS,
+        abi: MINI_APP_WEEKLY_BETS_ABI,
+        functionName: 'claim',
+        args: [BigInt(week.weekIndex)],
+        chainId: 42220,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to submit claim";
+      setClaimError(errorMessage);
+      console.error("Claim submission error:", error);
+      onClaimError();
+    }
   };
 
   const isProcessing = isWriting || isConfirming || isClaiming;
-  const canClaim = week.isFinalized && !week.isClaimed && week.isWithinDeadline && earned > 0n;
+  const canClaim = week.isFinalized && !week.isClaimed && week.isWithinDeadline && earned > 0n && !claimError;
 
   // Format deadline countdown
   const deadlineText = useMemo(() => {
@@ -167,6 +200,28 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground text-xs">Deadline:</span>
                 <span className="text-xs font-semibold text-orange-500">{deadlineText}</span>
+              </div>
+            )}
+            {claimHash && (
+              <div className="text-xs text-muted-foreground">
+                Transaction: {claimHash.slice(0, 10)}...{claimHash.slice(-8)}
+              </div>
+            )}
+            {claimError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-xs text-red-500">
+                <div className="flex items-center gap-2">
+                  <Icons.Alert className="h-3 w-3" />
+                  <span>{claimError}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setClaimError(null);
+                    resetWrite();
+                  }}
+                  className="mt-1 text-red-400 hover:text-red-300 underline"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
             <Button
