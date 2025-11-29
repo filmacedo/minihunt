@@ -124,10 +124,6 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
       return;
     }
 
-    if (!week.isFinalized) {
-      return;
-    }
-
     if (week.isClaimed) {
       return;
     }
@@ -155,7 +151,9 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
   };
 
   const isProcessing = isWriting || isConfirming || isClaiming;
-  const canClaim = week.isFinalized && !week.isClaimed && week.isWithinDeadline && earned > 0n && !claimError;
+  // Allow claiming if user has earnings, not already claimed, and within deadline
+  // Contract will handle finalization (first claim can finalize the week)
+  const canClaim = !week.isClaimed && week.isWithinDeadline && earned > 0n && !claimError;
 
   // Format deadline countdown
   const deadlineText = useMemo(() => {
@@ -200,25 +198,6 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
               className="w-full h-10 text-sm bg-muted text-muted-foreground font-semibold font-mono disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Already Claimed
-            </Button>
-          </div>
-        ) : !week.isFinalized ? (
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground text-sm">Claimable:</span>
-              <span className="text-sm font-semibold text-[#E1FF00] dark:text-[#E1FF00] font-mono">
-                {formatUnitsFixed(earned, 18)} CELO
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground text-sm">Status:</span>
-              <span className="text-sm font-semibold text-muted-foreground">Week not finalized</span>
-            </div>
-            <Button
-              disabled
-              className="w-full h-10 text-sm bg-muted text-muted-foreground font-semibold font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Not Finalized
             </Button>
           </div>
         ) : !week.isWithinDeadline ? (

@@ -193,8 +193,8 @@ export async function GET(request: Request) {
     };
 
     // Get finalized status for all weeks in parallel
-    // Note: If weekFinalized hasn't been run yet, this will return false
-    // but we still show earnings from the database
+    // Note: Finalization is not required for claiming - the first claim can finalize the week
+    // We still check finalization status for informational purposes only
     const weekIndices = weeks.map((week) => calculateWeekIndex(week.start_time));
     const finalizedStatuses = await Promise.all(
       weekIndices.map(async (weekIndex) => {
@@ -207,7 +207,7 @@ export async function GET(request: Request) {
           }) as boolean;
         } catch (error) {
           // If contract call fails, assume not finalized
-          // This allows us to still show database earnings
+          // This is informational only - claiming doesn't require finalization
           console.warn(`Failed to check finalization for week ${weekIndex}:`, error);
           return false;
         }
