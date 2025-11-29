@@ -280,6 +280,11 @@ export async function GET(request: Request) {
       // Compare by week index (from contract's getWeekIndex) not database ID
       // This ensures we correctly identify the current week even if database IDs differ
       const isCurrentWeek = weekIndex === currentWeekIndex;
+      
+      // Debug logging
+      if (process.env.NODE_ENV === 'development' && isCurrentWeek) {
+        console.log(`[fid-stats API] Found current week: weekId=${weekId}, weekIndex=${weekIndex}, currentWeekIndex=${currentWeekIndex}, startTime=${week.start_time}`);
+      }
 
       return {
         weekId: weekId,

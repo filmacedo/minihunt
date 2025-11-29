@@ -105,6 +105,13 @@ export async function GET(request: Request) {
           weekIndex = calculateWeekIndex(new Date(week.start_time), startTime, weekSeconds);
         }
 
+        const isCurrentWeek = weekIndex === currentWeekIndex;
+        
+        // Debug logging
+        if (process.env.NODE_ENV === 'development' && isCurrentWeek) {
+          console.log(`[weeks API] Found current week: weekIndex=${weekIndex}, currentWeekIndex=${currentWeekIndex}, startTime=${week.start_time}`);
+        }
+
         return {
           id: week.id,
           startTime: week.start_time,
@@ -113,7 +120,7 @@ export async function GET(request: Request) {
           totalUniqueVoters: week.total_unique_voters || "0",
           prizePool: week.prize_pool || "0",
           weekIndex: weekIndex.toString(),
-          isCurrentWeek: weekIndex === currentWeekIndex,
+          isCurrentWeek,
         };
       })
     );
