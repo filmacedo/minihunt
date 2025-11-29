@@ -122,7 +122,9 @@ export async function GET(request: Request) {
 
     // Ensure we have at least the current week
     const weeks: WeekRecord[] = (allWeeks as WeekRecord[] | null) ?? ([] as WeekRecord[]);
-    const hasCurrentWeek = weeks.some((w) => w.id === currentWeek.id);
+    // Compare IDs as strings to ensure proper matching
+    const currentWeekIdStr = currentWeek.id.toString();
+    const hasCurrentWeek = weeks.some((w) => w.id.toString() === currentWeekIdStr);
     if (!hasCurrentWeek) {
       weeks.push(currentWeek);
       // Re-sort by start_time descending
@@ -264,12 +266,17 @@ export async function GET(request: Request) {
       const isWithinDeadline = now < deadline;
       const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
+      // Compare week IDs as strings to ensure proper matching
+      const weekIdStr = week.id.toString();
+      const currentWeekIdStr = currentWeek.id.toString();
+      const isCurrentWeek = weekIdStr === currentWeekIdStr;
+
       return {
-        weekId: week.id.toString(),
+        weekId: weekIdStr,
         weekIndex: weekIndex.toString(),
         startTime: week.start_time,
         endTime: week.end_time,
-        isCurrentWeek: week.id === currentWeek.id,
+        isCurrentWeek,
         spent: totalSpent.toString(),
         earned: totalEarned.toString(),
         isFinalized,
