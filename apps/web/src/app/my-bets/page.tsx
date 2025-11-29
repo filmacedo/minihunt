@@ -194,13 +194,28 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
 
 export default function MyBetsPage() {
   const { context } = useMiniApp();
-  const { stats, isLoading, refetch } = useUserVotes(context?.user?.fid);
+  const { stats, isLoading, refetch, error } = useUserVotes(context?.user?.fid);
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
   
   const [modalOpen, setModalOpen] = useState<string | null>(null);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
   const [claimingWeek, setClaimingWeek] = useState<string | null>(null);
+
+  // Debug logging
+  useEffect(() => {
+    if (error) {
+      console.error("Error loading user votes:", error);
+    }
+    if (context?.user?.fid) {
+      console.log("FID:", context.user.fid);
+    } else {
+      console.warn("No FID found in context");
+    }
+    if (stats.length > 0) {
+      console.log("Stats loaded:", stats);
+    }
+  }, [error, context?.user?.fid, stats]);
 
   const handleOpenModal = (modal: string) => setModalOpen(modal);
   const handleCloseModal = () => {
@@ -239,13 +254,17 @@ export default function MyBetsPage() {
           <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="bg-muted/30 px-4 py-3 border-b border-border">
               <div className="font-semibold text-foreground">
-                Week {currentWeekStat?.weekId || "Loading..."}
+                {isLoading ? "Loading..." : currentWeekStat ? `Week ${currentWeekStat.weekId}` : "No week data"}
               </div>
             </div>
 
             <div className="p-4 space-y-4">
-              {isLoading ? (
+              {error ? (
+                <div className="text-center text-red-500 py-4">Error: {error.message}</div>
+              ) : isLoading ? (
                 <div className="text-center text-muted-foreground py-4">Loading stats...</div>
+              ) : !currentWeekStat ? (
+                <div className="text-center text-muted-foreground py-4">No current week data available</div>
               ) : (
                 <>
                   <div className="flex justify-between items-center py-2 border-b border-border last:border-0">
@@ -322,7 +341,11 @@ export default function MyBetsPage() {
             Past Weeks
           </h2>
           <div className="space-y-3">
-            {isLoading ? (
+            {error ? (
+              <div className="text-center text-red-500 py-4 bg-card rounded-xl border border-red-500/20">
+                Error loading weeks: {error.message}
+              </div>
+            ) : isLoading ? (
                <div className="text-center text-muted-foreground py-4">Loading history...</div>
             ) : pastWeeks.length === 0 ? (
                <div className="text-center text-muted-foreground py-4 bg-card rounded-xl border border-dashed border-border">

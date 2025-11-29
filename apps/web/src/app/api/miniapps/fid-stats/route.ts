@@ -235,7 +235,7 @@ export async function GET(request: Request) {
       const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
       return {
-        weekId: week.id,
+        weekId: week.id.toString(),
         weekIndex: weekIndex.toString(),
         startTime: week.start_time,
         endTime: week.end_time,
