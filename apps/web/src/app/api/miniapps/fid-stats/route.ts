@@ -245,8 +245,8 @@ export async function GET(request: Request) {
 
       // Debug logging for claim status
       if (process.env.NODE_ENV === 'development') {
-        if (earned > 0n) {
-          console.log(`[fid-stats API] Week ${weekId} (index ${weekIndex}): earned=${earned}, isClaimed=${isClaimed}, claimInfo=${claimInfo ? JSON.stringify(claimInfo) : 'null'}`);
+        if (totalEarned > 0n) {
+          console.log(`[fid-stats API] Week ${weekId} (index ${weekIndex}): earned=${totalEarned}, isClaimed=${isClaimed}, claimInfo=${claimInfo ? JSON.stringify(claimInfo) : 'null'}`);
         }
       }
 
