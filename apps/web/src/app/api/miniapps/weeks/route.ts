@@ -5,7 +5,7 @@ import type { Abi } from "viem";
 import { env } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
-import { getContractWeekMetadata } from "@/lib/repositories/weeks";
+import { getContractWeekMetadata, findOrCreateWeekByTimestamp } from "@/lib/repositories/weeks";
 import type { Database } from "@/lib/database.types";
 
 type WeekRecord = Database["public"]["Tables"]["weeks"]["Row"];
@@ -77,9 +77,28 @@ export async function GET(request: Request) {
       functionName: "getCurrentWeek",
     })) as bigint;
     
+    // Calculate current week's start time to ensure it exists in database
+    const startTime = (await publicClient.readContract({
+      abi: WEEKLY_BETS_ABI,
+      address: contractAddress,
+      functionName: "startTime",
+    })) as bigint;
+
+    const weekSeconds = (await publicClient.readContract({
+      abi: WEEKLY_BETS_ABI,
+      address: contractAddress,
+      functionName: "WEEK_SECONDS",
+    })) as bigint;
+
+    const currentWeekStartSeconds = startTime + currentWeekIndex * weekSeconds;
+    const currentWeekStartTime = new Date(Number(currentWeekStartSeconds) * 1000);
+    
+    // Ensure current week exists in database
+    const currentWeek = await findOrCreateWeekByTimestamp(currentWeekStartTime.toISOString());
+    
     // Debug logging
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[weeks API] Contract currentWeekIndex: ${currentWeekIndex}`);
+      console.log(`[weeks API] Contract currentWeekIndex: ${currentWeekIndex}, currentWeekStartTime: ${currentWeekStartTime.toISOString()}`);
     }
 
     // Get all weeks from database
@@ -92,9 +111,21 @@ export async function GET(request: Request) {
       throw new Error(`Failed to fetch weeks: ${weeksError.message}`);
     }
 
+    // Ensure we have the current week in the list
+    const weeksList: WeekRecord[] = (allWeeks as WeekRecord[] | null) ?? ([] as WeekRecord[]);
+    const currentWeekIdStr = currentWeek.id.toString();
+    const hasCurrentWeek = weeksList.some((w) => w.id.toString() === currentWeekIdStr);
+    if (!hasCurrentWeek) {
+      weeksList.push(currentWeek);
+      // Re-sort by start_time descending
+      weeksList.sort((a, b) => 
+        new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+      );
+    }
+
     // Use contract's getWeekIndex function to ensure consistency
     const weeksWithIndices = await Promise.all(
-      ((allWeeks || []) as WeekRecord[]).map(async (week) => {
+      weeksList.map(async (week) => {
         const timestampSeconds = BigInt(Math.floor(new Date(week.start_time).getTime() / 1000));
         let weekIndex: bigint;
         try {
