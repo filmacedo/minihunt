@@ -5,7 +5,7 @@ import type { Abi } from "viem";
 import { env } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
-import { findOrCreateWeekByTimestamp, type WeekRecord, getContractWeekMetadata } from "@/lib/repositories/weeks";
+import { type WeekRecord, getContractWeekMetadata } from "@/lib/repositories/weeks";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -71,45 +71,6 @@ export async function GET(request: Request) {
 
     const fidString = fid.toString();
 
-    // Get current week from contract
-    let currentWeekIndex: bigint;
-    let currentWeekStartTime: Date;
-    try {
-      currentWeekIndex = (await publicClient.readContract({
-        abi: WEEKLY_BETS_ABI,
-        address: contractAddress,
-        functionName: "getCurrentWeek",
-      })) as bigint;
-
-      // Get startTime from contract to calculate current week's start time
-      const startTime = (await publicClient.readContract({
-        abi: WEEKLY_BETS_ABI,
-        address: contractAddress,
-        functionName: "startTime",
-      })) as bigint;
-
-      const weekSeconds = (await publicClient.readContract({
-        abi: WEEKLY_BETS_ABI,
-        address: contractAddress,
-        functionName: "WEEK_SECONDS",
-      })) as bigint;
-
-      const currentWeekStartSeconds = startTime + currentWeekIndex * weekSeconds;
-      currentWeekStartTime = new Date(Number(currentWeekStartSeconds) * 1000);
-    } catch (error) {
-      console.error("Failed to get current week from contract:", error);
-      return NextResponse.json(
-        {
-          error: "Failed to get current week from contract",
-          details: error instanceof Error ? error.message : "Unknown error",
-        },
-        { status: 500 }
-      );
-    }
-
-    // Ensure current week exists in database
-    const currentWeek = await findOrCreateWeekByTimestamp(currentWeekStartTime.toISOString());
-
     // Get all weeks from database
     const { data: allWeeks, error: weeksError } = await client
       .from("weeks")
@@ -120,18 +81,7 @@ export async function GET(request: Request) {
       throw new Error(`Failed to fetch weeks: ${weeksError.message}`);
     }
 
-    // Ensure we have at least the current week
     const weeks: WeekRecord[] = (allWeeks as WeekRecord[] | null) ?? ([] as WeekRecord[]);
-    // Compare IDs as strings to ensure proper matching
-    const currentWeekIdStr = currentWeek.id.toString();
-    const hasCurrentWeek = weeks.some((w) => w.id.toString() === currentWeekIdStr);
-    if (!hasCurrentWeek) {
-      weeks.push(currentWeek);
-      // Re-sort by start_time descending
-      weeks.sort((a, b) => 
-        new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-      );
-    }
 
     // Get all week IDs
     const weekIds = weeks.map((w) => w.id);
@@ -277,13 +227,14 @@ export async function GET(request: Request) {
       const isWithinDeadline = now < deadline;
       const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      // Compare by week index (from contract's getWeekIndex) not database ID
-      // This ensures we correctly identify the current week even if database IDs differ
-      const isCurrentWeek = weekIndex === currentWeekIndex;
+      // Determine if this is the current week using database startTime and endTime
+      const weekStart = new Date(week.start_time);
+      const weekEnd = new Date(week.end_time);
+      const isCurrentWeek = now >= weekStart && now < weekEnd;
       
       // Debug logging
       if (process.env.NODE_ENV === 'development' && isCurrentWeek) {
-        console.log(`[fid-stats API] Found current week: weekId=${weekId}, weekIndex=${weekIndex}, currentWeekIndex=${currentWeekIndex}, startTime=${week.start_time}`);
+        console.log(`[fid-stats API] Found current week: weekId=${weekId}, weekIndex=${weekIndex}, startTime=${week.start_time}, endTime=${week.end_time}, now=${now.toISOString()}`);
       }
 
       return {
@@ -304,9 +255,13 @@ export async function GET(request: Request) {
       };
     });
 
+    // Find the current week index for the response
+    const currentWeek = weekStats.find((w) => w.isCurrentWeek);
+    const currentWeekIndex = currentWeek ? currentWeek.weekIndex : "0";
+
     return NextResponse.json({
       fid,
-      currentWeekIndex: currentWeekIndex.toString(),
+      currentWeekIndex,
       weeks: weekStats,
     });
   } catch (error) {
