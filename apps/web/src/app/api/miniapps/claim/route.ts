@@ -115,7 +115,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { week: weekIndex, amount } = claimedEvent.args as {
+    if (!claimedEvent.args) {
+      return NextResponse.json(
+        { error: "Claimed event has no args" },
+        { status: 400 }
+      );
+    }
+
+    const { week: weekIndex, amount } = claimedEvent.args as unknown as {
       week: bigint;
       claimer: Address;
       amount: bigint;
