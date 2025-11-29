@@ -78,18 +78,6 @@ export async function GET(request: Request) {
     })) as bigint;
     
     // Calculate current week's start time to ensure it exists in database
-    const startTime = (await publicClient.readContract({
-      abi: WEEKLY_BETS_ABI,
-      address: contractAddress,
-      functionName: "startTime",
-    })) as bigint;
-
-    const weekSeconds = (await publicClient.readContract({
-      abi: WEEKLY_BETS_ABI,
-      address: contractAddress,
-      functionName: "WEEK_SECONDS",
-    })) as bigint;
-
     const currentWeekStartSeconds = startTime + currentWeekIndex * weekSeconds;
     const currentWeekStartTime = new Date(Number(currentWeekStartSeconds) * 1000);
     
