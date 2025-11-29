@@ -6,6 +6,9 @@ import { env } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { getContractWeekMetadata } from "@/lib/repositories/weeks";
+import type { Database } from "@/lib/database.types";
+
+type WeekRecord = Database["public"]["Tables"]["weeks"]["Row"];
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -84,7 +87,7 @@ export async function GET(request: Request) {
       throw new Error(`Failed to fetch weeks: ${weeksError.message}`);
     }
 
-    const weeks = (allWeeks || []).map((week) => {
+    const weeks = ((allWeeks || []) as WeekRecord[]).map((week) => {
       const startTimeDate = new Date(week.start_time);
       const weekIndex = calculateWeekIndex(startTimeDate, startTime, weekSeconds);
 
