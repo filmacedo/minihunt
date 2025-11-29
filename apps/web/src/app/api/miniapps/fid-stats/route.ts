@@ -5,7 +5,7 @@ import type { Abi } from "viem";
 import { env } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
-import { findOrCreateWeekByTimestamp, type WeekRecord } from "@/lib/repositories/weeks";
+import { findOrCreateWeekByTimestamp, type WeekRecord, getContractWeekMetadata } from "@/lib/repositories/weeks";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -181,8 +181,40 @@ export async function GET(request: Request) {
       }
     }
 
+    // Get contract metadata for week index calculation
+    const { startTime, weekSeconds } = await getContractWeekMetadata();
+
+    // Helper function to calculate week index
+    const calculateWeekIndex = (startTimeISO: string): bigint => {
+      const timestampSeconds = BigInt(Math.floor(new Date(startTimeISO).getTime() / 1000));
+      if (timestampSeconds < startTime) return 0n;
+      const offset = timestampSeconds - startTime;
+      return offset / weekSeconds;
+    };
+
+    // Get finalized status for all weeks in parallel
+    const weekIndices = weeks.map((week) => calculateWeekIndex(week.start_time));
+    const finalizedStatuses = await Promise.all(
+      weekIndices.map(async (weekIndex) => {
+        try {
+          return await publicClient.readContract({
+            abi: WEEKLY_BETS_ABI,
+            address: contractAddress,
+            functionName: "isWeekFinalized",
+            args: [weekIndex],
+          }) as boolean;
+        } catch {
+          return false;
+        }
+      })
+    );
+
+    // Check for claims in database (we'll create a claims table later, for now return false)
+    // TODO: Query claims table once created
+    const claimedWeeks = new Set<string>(); // Placeholder - will be populated from database
+
     // Build response with week stats
-    const weekStats = weeks.map((week) => {
+    const weekStats = weeks.map((week, index) => {
       const weekId = week.id.toString();
       const spentFromVotes = votesByWeekId.get(weekId) || 0n;
       const earnings = earningsByWeekId.get(weekId);
@@ -191,13 +223,30 @@ export async function GET(request: Request) {
       const totalSpent = earnings?.paidAmount || spentFromVotes;
       const totalEarned = earnings?.earningAmount || 0n;
 
+      const weekIndex = weekIndices[index];
+      const isFinalized = finalizedStatuses[index];
+      const isClaimed = claimedWeeks.has(weekId);
+
+      // Calculate 90-day deadline: week.endTime + 90 days
+      const endTime = new Date(week.end_time);
+      const deadline = new Date(endTime.getTime() + 90 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const isWithinDeadline = now < deadline;
+      const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
       return {
         weekId: week.id,
+        weekIndex: weekIndex.toString(),
         startTime: week.start_time,
         endTime: week.end_time,
         isCurrentWeek: week.id === currentWeek.id,
         spent: totalSpent.toString(),
         earned: totalEarned.toString(),
+        isFinalized,
+        isClaimed,
+        deadline: deadline.toISOString(),
+        isWithinDeadline,
+        daysUntilDeadline: isWithinDeadline ? daysUntilDeadline : null,
       };
     });
 
