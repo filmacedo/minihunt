@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { week: weekIndex, claimer, amount } = claimedEvent.args as {
+    const { week: weekIndex, amount } = claimedEvent.args as {
       week: bigint;
       claimer: Address;
       amount: bigint;

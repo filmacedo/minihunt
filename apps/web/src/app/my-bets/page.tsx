@@ -297,8 +297,6 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
 export default function MyBetsPage() {
   const { context } = useMiniApp();
   const { stats, isLoading, refetch, error } = useUserVotes(context?.user?.fid);
-  const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
   
   const [modalOpen, setModalOpen] = useState<string | null>(null);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);

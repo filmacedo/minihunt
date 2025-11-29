@@ -44,10 +44,6 @@ const publicClient = createPublicClient({
 
 const client = getSupabaseServerClient();
 
-function toIsoString(seconds: bigint): string {
-  return new Date(Number(seconds) * 1000).toISOString();
-}
-
 /**
  * Calculate week index from a timestamp
  */
@@ -105,7 +101,7 @@ export async function GET(request: Request) {
     });
 
     // If user provided FID, check which weeks have rewards
-    let weeksWithRewards: Set<string> = new Set();
+    const weeksWithRewards: Set<string> = new Set();
     if (fidParam) {
       const fid = parseInt(fidParam, 10);
       if (!isNaN(fid) && fid > 0) {

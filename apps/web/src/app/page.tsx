@@ -21,7 +21,7 @@ export default function Home() {
   const userFid = context?.user?.fid;
 
   // Fetch all weeks
-  const { weeks, currentWeekIndex, isLoading: weeksLoading } = useWeeks(userFid);
+  const { weeks, currentWeekIndex } = useWeeks(userFid);
 
   // State for selected week - initialize with current week index if available
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<string | null>(currentWeekIndex || null);
