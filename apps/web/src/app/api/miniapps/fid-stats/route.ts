@@ -183,21 +183,32 @@ export async function GET(request: Request) {
       }
     }
 
-    // Get contract metadata for week index calculation
-    const { startTime, weekSeconds } = await getContractWeekMetadata();
-
-    // Helper function to calculate week index
-    const calculateWeekIndex = (startTimeISO: string): bigint => {
-      const timestampSeconds = BigInt(Math.floor(new Date(startTimeISO).getTime() / 1000));
-      if (timestampSeconds < startTime) return 0n;
-      const offset = timestampSeconds - startTime;
-      return offset / weekSeconds;
-    };
+    // Use contract's getWeekIndex function to ensure consistency
+    // This guarantees we use the exact same calculation as the contract
+    const weekIndices = await Promise.all(
+      weeks.map(async (week) => {
+        const timestampSeconds = BigInt(Math.floor(new Date(week.start_time).getTime() / 1000));
+        try {
+          return await publicClient.readContract({
+            abi: WEEKLY_BETS_ABI,
+            address: contractAddress,
+            functionName: "getWeekIndex",
+            args: [timestampSeconds],
+          }) as bigint;
+        } catch (error) {
+          console.warn(`Failed to get week index for ${week.start_time}:`, error);
+          // Fallback to manual calculation if contract call fails
+          const { startTime, weekSeconds } = await getContractWeekMetadata();
+          if (timestampSeconds < startTime) return 0n;
+          const offset = timestampSeconds - startTime;
+          return offset / weekSeconds;
+        }
+      })
+    );
 
     // Get finalized status for all weeks in parallel
     // Note: Finalization is not required for claiming - the first claim can finalize the week
     // We still check finalization status for informational purposes only
-    const weekIndices = weeks.map((week) => calculateWeekIndex(week.start_time));
     const finalizedStatuses = await Promise.all(
       weekIndices.map(async (weekIndex) => {
         try {
@@ -266,7 +277,7 @@ export async function GET(request: Request) {
       const isWithinDeadline = now < deadline;
       const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      // Compare by week index (calculated from start_time) not database ID
+      // Compare by week index (from contract's getWeekIndex) not database ID
       // This ensures we correctly identify the current week even if database IDs differ
       const isCurrentWeek = weekIndex === currentWeekIndex;
 

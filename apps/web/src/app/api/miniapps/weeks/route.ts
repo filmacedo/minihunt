@@ -87,21 +87,38 @@ export async function GET(request: Request) {
       throw new Error(`Failed to fetch weeks: ${weeksError.message}`);
     }
 
-    const weeks = ((allWeeks || []) as WeekRecord[]).map((week) => {
-      const startTimeDate = new Date(week.start_time);
-      const weekIndex = calculateWeekIndex(startTimeDate, startTime, weekSeconds);
+    // Use contract's getWeekIndex function to ensure consistency
+    const weeksWithIndices = await Promise.all(
+      ((allWeeks || []) as WeekRecord[]).map(async (week) => {
+        const timestampSeconds = BigInt(Math.floor(new Date(week.start_time).getTime() / 1000));
+        let weekIndex: bigint;
+        try {
+          weekIndex = await publicClient.readContract({
+            abi: WEEKLY_BETS_ABI,
+            address: contractAddress,
+            functionName: "getWeekIndex",
+            args: [timestampSeconds],
+          }) as bigint;
+        } catch (error) {
+          console.warn(`Failed to get week index for ${week.start_time}:`, error);
+          // Fallback to manual calculation if contract call fails
+          weekIndex = calculateWeekIndex(new Date(week.start_time), startTime, weekSeconds);
+        }
 
-      return {
-        id: week.id,
-        startTime: week.start_time,
-        endTime: week.end_time,
-        totalVoters: week.total_voters || "0",
-        totalUniqueVoters: week.total_unique_voters || "0",
-        prizePool: week.prize_pool || "0",
-        weekIndex: weekIndex.toString(),
-        isCurrentWeek: weekIndex === currentWeekIndex,
-      };
-    });
+        return {
+          id: week.id,
+          startTime: week.start_time,
+          endTime: week.end_time,
+          totalVoters: week.total_voters || "0",
+          totalUniqueVoters: week.total_unique_voters || "0",
+          prizePool: week.prize_pool || "0",
+          weekIndex: weekIndex.toString(),
+          isCurrentWeek: weekIndex === currentWeekIndex,
+        };
+      })
+    );
+    
+    const weeks = weeksWithIndices;
 
     // If user provided FID, check which weeks have rewards
     const weeksWithRewards: Set<string> = new Set();
