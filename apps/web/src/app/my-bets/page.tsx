@@ -78,15 +78,22 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
       })
         .then(() => {
           console.log("Claim tracked successfully");
-          onClaimSuccess();
-          setClaimError(null);
+          // Add a small delay to ensure database transaction is committed
+          // before refetching to get updated claim status
+          setTimeout(() => {
+            onClaimSuccess();
+            setClaimError(null);
+          }, 500);
         })
         .catch((err) => {
           console.error("Failed to track claim:", err);
           // Still call onClaimSuccess to refresh UI, even if API call fails
           // The claim was successful on-chain, we just couldn't track it
-          onClaimSuccess();
-          setClaimError(null);
+          // Add delay here too to allow for eventual consistency
+          setTimeout(() => {
+            onClaimSuccess();
+            setClaimError(null);
+          }, 1000);
         });
     }
   }, [isClaimSuccess, claimHash, context?.user?.fid, post, onClaimSuccess]);
@@ -507,7 +514,10 @@ export default function MyBetsPage() {
                              onClaimStart={() => setClaimingWeek(week.weekId)}
                              onClaimSuccess={() => {
                                setClaimingWeek(null);
-                               refetch();
+                               // Use a small delay and cache-bust to ensure fresh data
+                               setTimeout(() => {
+                                 refetch(true);
+                               }, 500);
                              }}
                              onClaimError={() => setClaimingWeek(null)}
                            />

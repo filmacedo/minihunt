@@ -31,7 +31,7 @@ export function useUserVotes(fid?: number) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchUserVotes = useCallback(async () => {
+  const fetchUserVotes = useCallback(async (cacheBust?: boolean) => {
     if (!fid) {
       setStats([]);
       return;
@@ -39,9 +39,10 @@ export function useUserVotes(fid?: number) {
 
     try {
       setIsLoading(true);
-      const data = (await get(
-        `/api/miniapps/fid-stats?fid=${fid}`
-      )) as UserVotesResponse;
+      const url = cacheBust 
+        ? `/api/miniapps/fid-stats?fid=${fid}&_t=${Date.now()}`
+        : `/api/miniapps/fid-stats?fid=${fid}`;
+      const data = (await get(url)) as UserVotesResponse;
       setStats(data.weeks);
       setCurrentWeekIndex(data.currentWeekIndex);
       setError(null);
