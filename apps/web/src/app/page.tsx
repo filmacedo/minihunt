@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { TopNav } from "@/components/navbar";
 import { PrizeBanner } from "@/components/prize-banner";
 import { WelcomeBanner } from "@/components/welcome-banner";
@@ -8,6 +8,8 @@ import { SubmitAppModal } from "@/components/modals/submit-app-modal";
 import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { useVotersLeaderboard } from "@/hooks/use-voters-leaderboard";
+import { useWeeks } from "@/hooks/use-weeks";
+import { useMiniApp } from "@/contexts/miniapp-context";
 import { MiniApp } from "@/lib/types";
 import { formatUnitsFixed } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,14 +17,38 @@ import { Icons } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
+  const { context } = useMiniApp();
+  const userFid = context?.user?.fid;
+
+  // Fetch all weeks
+  const { weeks, currentWeekIndex, isLoading: weeksLoading } = useWeeks(userFid);
+
+  // State for selected week
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<string | null>(null);
+
+  // Set initial selected week to current week
+  useEffect(() => {
+    if (currentWeekIndex && !selectedWeekIndex) {
+      setSelectedWeekIndex(currentWeekIndex);
+    }
+  }, [currentWeekIndex, selectedWeekIndex]);
+
+  // Get selected week's start time for leaderboard
+  const selectedWeek = useMemo(() => {
+    if (!selectedWeekIndex || !weeks.length) return null;
+    return weeks.find((w) => w.weekIndex === selectedWeekIndex);
+  }, [weeks, selectedWeekIndex]);
+
+  const timestampForLeaderboard = selectedWeek?.startTime || null;
+
   const {
     leaderboard: apps,
     week: appsWeek,
     isLoading: appsLoading,
     refetch: refetchApps,
-  } = useLeaderboard();
+  } = useLeaderboard(timestampForLeaderboard);
   const { leaderboard: voters, isLoading: votersLoading } =
-    useVotersLeaderboard();
+    useVotersLeaderboard(timestampForLeaderboard);
 
   const [activeTab, setActiveTab] = useState<"apps" | "hunters">("apps");
 
@@ -52,11 +78,20 @@ export default function Home() {
     handleCloseModal();
   };
 
+  const handleWeekChange = (weekIndex: string) => {
+    setSelectedWeekIndex(weekIndex);
+  };
+
   return (
     <main className="pb-20 relative min-h-screen">
       <TopNav onOpenModal={handleOpenModal} />
       <WelcomeBanner />
-      <PrizeBanner week={appsWeek} />
+      <PrizeBanner 
+        week={appsWeek} 
+        weeks={weeks}
+        selectedWeekIndex={selectedWeekIndex}
+        onWeekChange={handleWeekChange}
+      />
 
       {/* Tabs */}
       <div className="sticky top-[57px] sm:top-[61px] bg-background z-30 border-b border-border">

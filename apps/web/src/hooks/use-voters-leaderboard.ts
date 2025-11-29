@@ -19,7 +19,7 @@ interface VotersLeaderboardResponse {
   leaderboard: VoterEntry[];
 }
 
-export function useVotersLeaderboard() {
+export function useVotersLeaderboard(timestamp?: string | null) {
   const { get } = useApi();
   const [leaderboard, setLeaderboard] = useState<VoterEntry[]>([]);
   const [week, setWeek] = useState<WeekData | null>(null);
@@ -29,7 +29,10 @@ export function useVotersLeaderboard() {
   const fetchLeaderboard = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await get("/api/miniapps/voters-leaderboard") as VotersLeaderboardResponse;
+      const url = timestamp
+        ? `/api/miniapps/voters-leaderboard?timestamp=${encodeURIComponent(timestamp)}`
+        : "/api/miniapps/voters-leaderboard";
+      const data = await get(url) as VotersLeaderboardResponse;
       setLeaderboard(data.leaderboard);
       setWeek(data.week);
       setError(null);
@@ -38,7 +41,7 @@ export function useVotersLeaderboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [get]);
+  }, [get, timestamp]);
 
   useEffect(() => {
     fetchLeaderboard();

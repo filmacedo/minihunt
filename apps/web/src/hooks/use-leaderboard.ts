@@ -33,7 +33,7 @@ interface LeaderboardResponse {
   leaderboard: LeaderboardEntry[];
 }
 
-export function useLeaderboard() {
+export function useLeaderboard(timestamp?: string | null) {
   const { get } = useApi();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [week, setWeek] = useState<WeekData | null>(null);
@@ -43,7 +43,10 @@ export function useLeaderboard() {
   const fetchLeaderboard = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await get("/api/miniapps") as LeaderboardResponse;
+      const url = timestamp 
+        ? `/api/miniapps?timestamp=${encodeURIComponent(timestamp)}`
+        : "/api/miniapps";
+      const data = await get(url) as LeaderboardResponse;
       setLeaderboard(data.leaderboard);
       setWeek(data.week);
       setError(null);
@@ -52,7 +55,7 @@ export function useLeaderboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [get]);
+  }, [get, timestamp]);
 
   useEffect(() => {
     fetchLeaderboard();
