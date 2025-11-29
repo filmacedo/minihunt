@@ -11,7 +11,6 @@ import { formatUnitsFixed } from "@/lib/utils";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect, connectors } from "wagmi";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { useApi } from "@/hooks/use-api";
-import { useMiniApp } from "@/contexts/miniapp-context";
 
 // Reuse these modals
 import { SubmitAppModal } from "@/components/modals/submit-app-modal";
