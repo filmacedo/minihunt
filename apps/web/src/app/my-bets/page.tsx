@@ -279,6 +279,15 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
   );
 }
 
+// Helper function to format week date range
+function formatWeekDateRange(startTime: string, endTime: string): string {
+  const startDate = new Date(startTime);
+  const endDate = new Date(endTime);
+  const startFormatted = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const endFormatted = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startFormatted} - ${endFormatted}`;
+}
+
 export default function MyBetsPage() {
   const { context } = useMiniApp();
   const { stats, isLoading, refetch, error } = useUserVotes(context?.user?.fid);
@@ -339,7 +348,7 @@ export default function MyBetsPage() {
           <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <div className="bg-muted/30 px-4 py-3 border-b border-border">
               <div className="font-semibold text-foreground">
-                {isLoading ? "Loading..." : currentWeekStat ? `Week ${currentWeekStat.weekId}` : "No week data"}
+                {isLoading ? "Loading..." : currentWeekStat ? formatWeekDateRange(currentWeekStat.startTime, currentWeekStat.endTime) : "No week data"}
               </div>
             </div>
 
@@ -454,11 +463,8 @@ export default function MyBetsPage() {
                     >
                       <div className="flex flex-col items-start gap-1">
                         <div className="text-foreground text-base font-semibold">
-                          Week {week.weekId}
+                          {formatWeekDateRange(week.startTime, week.endTime)}
                         </div>
-                         <div className="text-xs text-muted-foreground">
-                           {new Date(week.startTime).toLocaleDateString()}
-                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                          <span className={cn("font-mono text-sm", isWinner ? "text-[#E1FF00] dark:text-[#E1FF00] text-green-600" : "text-muted-foreground")}>

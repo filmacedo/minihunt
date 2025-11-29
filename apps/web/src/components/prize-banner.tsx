@@ -39,11 +39,10 @@ export function PrizeBanner({ week, weeks = [], selectedWeekIndex, onWeekChange 
     const start = new Date(week.startTime);
     const end = new Date(week.endTime);
     
-    const formatDate = (date: Date) => {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    };
+    const startFormatted = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endFormatted = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     
-    return `${formatDate(start)} - ${formatDate(end)}`;
+    return `${startFormatted} - ${endFormatted}`;
   }, [week]);
 
   // Find current week index in the weeks array
@@ -101,15 +100,10 @@ export function PrizeBanner({ week, weeks = [], selectedWeekIndex, onWeekChange 
             <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs sm:text-sm font-semibold uppercase tracking-wide">
               <Icons.Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="whitespace-nowrap">
-                {weekDates} Prize Pool
-                {selectedWeek && (
-                  <span className={cn(
-                    "ml-2 px-2 py-0.5 rounded text-[10px]",
-                    selectedWeek.hasRewards 
-                      ? "bg-[#E1FF00]/20 text-[#E1FF00] dark:text-[#E1FF00]" 
-                      : "bg-muted/50"
-                  )}>
-                    Week {selectedWeek.weekIndex}
+                {weekDates ? `${weekDates} Prize Pool` : "Prize Pool"}
+                {selectedWeek && selectedWeek.hasRewards && (
+                  <span className="ml-2 px-2 py-0.5 rounded text-[10px] bg-[#E1FF00]/20 text-[#E1FF00] dark:text-[#E1FF00]">
+                    Has Rewards
                   </span>
                 )}
               </span>
