@@ -451,6 +451,7 @@ export default function MyBetsPage() {
                 const spent = BigInt(week.spent);
                 const earned = BigInt(week.earned);
                 const isWinner = earned > spent;
+                const hasEarnings = earned > 0n;
 
                 return (
                   <div
@@ -467,8 +468,15 @@ export default function MyBetsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                         <span className={cn("font-mono text-sm", isWinner ? "text-[#E1FF00] dark:text-[#E1FF00] text-green-600" : "text-muted-foreground")}>
-                           {isWinner ? `+${formatUnitsFixed(earned, 18)} CELO` : "No Win"}
+                         <span className={cn(
+                           "font-mono text-sm",
+                           isWinner 
+                             ? "text-[#E1FF00] dark:text-[#E1FF00] text-green-600" 
+                             : hasEarnings 
+                             ? "text-[#E1FF00] dark:text-[#E1FF00]" 
+                             : "text-muted-foreground"
+                         )}>
+                           {hasEarnings ? `+${formatUnitsFixed(earned, 18)} CELO` : "No Win"}
                          </span>
                          <Icons.ChevronRight
                            className={cn(
