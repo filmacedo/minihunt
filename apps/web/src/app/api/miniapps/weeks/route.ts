@@ -70,12 +70,17 @@ export async function GET(request: Request) {
     // Get contract metadata
     const { startTime, weekSeconds } = await getContractWeekMetadata();
 
-    // Get current week index
+    // Get current week index from contract
     const currentWeekIndex = (await publicClient.readContract({
       abi: WEEKLY_BETS_ABI,
       address: contractAddress,
       functionName: "getCurrentWeek",
     })) as bigint;
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[weeks API] Contract currentWeekIndex: ${currentWeekIndex}`);
+    }
 
     // Get all weeks from database
     const { data: allWeeks, error: weeksError } = await client
@@ -107,9 +112,9 @@ export async function GET(request: Request) {
 
         const isCurrentWeek = weekIndex === currentWeekIndex;
         
-        // Debug logging
-        if (process.env.NODE_ENV === 'development' && isCurrentWeek) {
-          console.log(`[weeks API] Found current week: weekIndex=${weekIndex}, currentWeekIndex=${currentWeekIndex}, startTime=${week.start_time}`);
+        // Debug logging for all weeks
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[weeks API] Week ${week.id}: startTime=${week.start_time}, calculatedIndex=${weekIndex}, currentWeekIndex=${currentWeekIndex}, isCurrentWeek=${isCurrentWeek}`);
         }
 
         return {
