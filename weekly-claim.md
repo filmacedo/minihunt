@@ -27,20 +27,24 @@ We need to add a way to implement for users to claim the missing amounts from la
    - **Commit**: `6ae3744` - fix: convert weekId to string and add error handling
    - **Commit**: `[latest]` - feat: complete claim button implementation with error handling
 
-4. **Claim Status & Deadline**
-   - Check claim status in the database (not from contract)
-   - Calculate 90-day deadline on frontend: `week.endTime + 90 days`
-   - Show countdown timer for weeks approaching deadline
-   - Disable button after deadline expires
+4. ✅ **Claim Status & Deadline** - *Completed*
+   - ✅ Check claim status in the database (not from contract)
+   - ✅ Calculate 90-day deadline on frontend: `week.endTime + 90 days`
+   - ✅ Show countdown timer for weeks approaching deadline (14 days with color coding)
+   - ✅ Disable button after deadline expires
+   - **Commit**: `[latest]` - feat: complete claim status tracking and remaining tasks
 
-5. **Button States**
-   - **Enabled**: Week finalized, has rewards, within 90 days, not yet claimed
-   - **Disabled (Claimed)**: Already claimed - show amount claimed and date, disable button
-   - **Disabled (Expired)**: Past 90-day deadline - show "Claim expired" message
-   - **Disabled (Not Finalized)**: Week not finalized yet
+5. ✅ **Button States** - *Completed*
+   - ✅ **Enabled**: Week finalized, has rewards, within 90 days, not yet claimed
+   - ✅ **Disabled (Claimed)**: Already claimed - show amount claimed and date, disable button
+   - ✅ **Disabled (Expired)**: Past 90-day deadline - show "Claim expired" message
+   - ✅ **Disabled (Not Finalized)**: Week not finalized yet
+   - **Commit**: `407b3a4` - feat: add claim buttons to past week cards in My Bets page
+   - **Commit**: `[latest]` - feat: complete claim status tracking and remaining tasks
 
-6. **Multiple Weeks**
-   - Users claim each week individually (no batch claiming)
+6. ✅ **Multiple Weeks** - *Completed*
+   - ✅ Users claim each week individually (no batch claiming)
+   - **Note**: Implemented as part of task 2
 
 ### Technical Notes
 - No contract changes required
