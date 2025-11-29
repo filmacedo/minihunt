@@ -11,6 +11,8 @@ export interface WeekStat {
   earned: string;
   isFinalized: boolean;
   isClaimed: boolean;
+  claimedAmount: string | null;
+  claimedAt: string | null;
   deadline: string;
   isWithinDeadline: boolean;
   daysUntilDeadline: number | null;

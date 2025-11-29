@@ -10,6 +10,8 @@ import { useUserVotes } from "@/hooks/use-user-votes";
 import { formatUnitsFixed } from "@/lib/utils";
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useConnect, connectors } from "wagmi";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
+import { useApi } from "@/hooks/use-api";
+import { useMiniApp } from "@/contexts/miniapp-context";
 
 // Reuse these modals
 import { SubmitAppModal } from "@/components/modals/submit-app-modal";
@@ -23,6 +25,8 @@ interface ClaimButtonProps {
     weekIndex: string;
     isFinalized: boolean;
     isClaimed: boolean;
+    claimedAmount: string | null;
+    claimedAt: string | null;
     deadline: string;
     isWithinDeadline: boolean;
     daysUntilDeadline: number | null;
@@ -37,6 +41,8 @@ interface ClaimButtonProps {
 function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, onClaimError }: ClaimButtonProps) {
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
+  const { context } = useMiniApp();
+  const { post } = useApi();
   const [claimError, setClaimError] = useState<string | null>(null);
 
   const { 
@@ -63,13 +69,28 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
     }
   }, [isWriting]);
 
-  // Handle successful claim
+  // Handle successful claim - call API to track claim in database
   useEffect(() => {
-    if (isClaimSuccess && claimHash) {
-      onClaimSuccess();
-      setClaimError(null);
+    if (isClaimSuccess && claimHash && context?.user?.fid) {
+      // Call API to track claim in database
+      post("/api/miniapps/claim", {
+        tx_hash: claimHash,
+        fid: context.user.fid,
+      })
+        .then(() => {
+          console.log("Claim tracked successfully");
+          onClaimSuccess();
+          setClaimError(null);
+        })
+        .catch((err) => {
+          console.error("Failed to track claim:", err);
+          // Still call onClaimSuccess to refresh UI, even if API call fails
+          // The claim was successful on-chain, we just couldn't track it
+          onClaimSuccess();
+          setClaimError(null);
+        });
     }
-  }, [isClaimSuccess, claimHash, onClaimSuccess]);
+  }, [isClaimSuccess, claimHash, context?.user?.fid, post, onClaimSuccess]);
 
   // Handle write errors
   useEffect(() => {
@@ -155,6 +176,26 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
               <span className="text-muted-foreground text-sm">Status:</span>
               <span className="text-sm font-semibold text-muted-foreground">Claimed</span>
             </div>
+            {week.claimedAmount && (
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-sm">Amount Claimed:</span>
+                <span className="text-sm font-semibold text-[#E1FF00] dark:text-[#E1FF00] font-mono">
+                  {formatUnitsFixed(BigInt(week.claimedAmount), 18)} CELO
+                </span>
+              </div>
+            )}
+            {week.claimedAt && (
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-xs">Claimed on:</span>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {new Date(week.claimedAt).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  })}
+                </span>
+              </div>
+            )}
             <Button
               disabled
               className="w-full h-10 text-sm bg-muted text-muted-foreground font-semibold font-mono disabled:opacity-50 disabled:cursor-not-allowed"
@@ -196,10 +237,17 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
                 {formatUnitsFixed(earned, 18)} CELO
               </span>
             </div>
-            {week.daysUntilDeadline !== null && week.daysUntilDeadline <= 7 && (
+            {week.daysUntilDeadline !== null && week.daysUntilDeadline <= 14 && (
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground text-xs">Deadline:</span>
-                <span className="text-xs font-semibold text-orange-500">{deadlineText}</span>
+                <span className={cn(
+                  "text-xs font-semibold",
+                  week.daysUntilDeadline <= 3 ? "text-red-500" : 
+                  week.daysUntilDeadline <= 7 ? "text-orange-500" : 
+                  "text-yellow-500"
+                )}>
+                  {deadlineText}
+                </span>
               </div>
             )}
             {claimHash && (

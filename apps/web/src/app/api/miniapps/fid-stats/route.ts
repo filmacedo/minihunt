@@ -209,9 +209,33 @@ export async function GET(request: Request) {
       })
     );
 
-    // Check for claims in database (we'll create a claims table later, for now return false)
-    // TODO: Query claims table once created
-    const claimedWeeks = new Set<string>(); // Placeholder - will be populated from database
+    // Check for claims in database
+    const { data: claims, error: claimsError } = await client
+      .from("week_claims")
+      .select("week_id, claimed_amount, created_at")
+      .eq("fid", fidString)
+      .in("week_id", weekIds);
+
+    if (claimsError) {
+      console.error("Failed to fetch claims:", claimsError);
+      // Continue without claims data rather than failing
+    }
+
+    // Create map of claims by week ID
+    const claimsByWeekId = new Map<
+      string,
+      { amount: string; claimedAt: string }
+    >();
+    if (claims) {
+      for (const claim of claims) {
+        if (!claim.week_id) continue;
+        const weekId = claim.week_id.toString();
+        claimsByWeekId.set(weekId, {
+          amount: claim.claimed_amount || "0",
+          claimedAt: claim.created_at,
+        });
+      }
+    }
 
     // Build response with week stats
     const weekStats = weeks.map((week, index) => {
@@ -225,7 +249,8 @@ export async function GET(request: Request) {
 
       const weekIndex = weekIndices[index];
       const isFinalized = finalizedStatuses[index];
-      const isClaimed = claimedWeeks.has(weekId);
+      const claimInfo = claimsByWeekId.get(weekId);
+      const isClaimed = !!claimInfo;
 
       // Calculate 90-day deadline: week.endTime + 90 days
       const endTime = new Date(week.end_time);
@@ -244,6 +269,8 @@ export async function GET(request: Request) {
         earned: totalEarned.toString(),
         isFinalized,
         isClaimed,
+        claimedAmount: claimInfo?.amount || null,
+        claimedAt: claimInfo?.claimedAt || null,
         deadline: deadline.toISOString(),
         isWithinDeadline,
         daysUntilDeadline: isWithinDeadline ? daysUntilDeadline : null,
