@@ -193,6 +193,8 @@ export async function GET(request: Request) {
     };
 
     // Get finalized status for all weeks in parallel
+    // Note: If weekFinalized hasn't been run yet, this will return false
+    // but we still show earnings from the database
     const weekIndices = weeks.map((week) => calculateWeekIndex(week.start_time));
     const finalizedStatuses = await Promise.all(
       weekIndices.map(async (weekIndex) => {
@@ -203,7 +205,10 @@ export async function GET(request: Request) {
             functionName: "isWeekFinalized",
             args: [weekIndex],
           }) as boolean;
-        } catch {
+        } catch (error) {
+          // If contract call fails, assume not finalized
+          // This allows us to still show database earnings
+          console.warn(`Failed to check finalization for week ${weekIndex}:`, error);
           return false;
         }
       })

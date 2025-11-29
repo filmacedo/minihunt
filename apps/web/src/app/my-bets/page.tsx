@@ -205,6 +205,12 @@ function ClaimButton({ week, earned, isClaiming, onClaimStart, onClaimSuccess, o
         ) : !week.isFinalized ? (
           <div className="space-y-2">
             <div className="flex justify-between items-center">
+              <span className="text-muted-foreground text-sm">Claimable:</span>
+              <span className="text-sm font-semibold text-[#E1FF00] dark:text-[#E1FF00] font-mono">
+                {formatUnitsFixed(earned, 18)} CELO
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-muted-foreground text-sm">Status:</span>
               <span className="text-sm font-semibold text-muted-foreground">Week not finalized</span>
             </div>
