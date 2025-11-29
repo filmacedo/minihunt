@@ -3,11 +3,19 @@ import { useApi } from "./use-api";
 
 export interface WeekStat {
   weekId: string;
+  weekIndex: string;
   startTime: string;
   endTime: string;
   isCurrentWeek: boolean;
   spent: string;
   earned: string;
+  isFinalized: boolean;
+  isClaimed: boolean;
+  claimedAmount: string | null;
+  claimedAt: string | null;
+  deadline: string;
+  isWithinDeadline: boolean;
+  daysUntilDeadline: number | null;
 }
 
 interface UserVotesResponse {

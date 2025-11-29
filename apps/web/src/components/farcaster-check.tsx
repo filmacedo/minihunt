@@ -9,7 +9,22 @@ export function FarcasterCheck({ children }: { children: React.ReactNode }) {
   const [isInFarcaster, setIsInFarcaster] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(true);
 
+  // Check if we're in development mode
+  const isDevelopment = typeof window !== "undefined" && (
+    process.env.NODE_ENV === "development" ||
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname.includes("localhost")
+  );
+
   useEffect(() => {
+    // Skip Farcaster check in development
+    if (isDevelopment) {
+      setIsInFarcaster(true);
+      setIsChecking(false);
+      return;
+    }
+
     const checkFarcaster = async () => {
       try {
         // Check if we're in an iframe (Farcaster loads apps in iframes)
@@ -52,7 +67,7 @@ export function FarcasterCheck({ children }: { children: React.ReactNode }) {
     };
 
     checkFarcaster();
-  }, []);
+  }, [isDevelopment]);
 
   // Show loading state while checking
   if (isChecking) {
@@ -63,8 +78,8 @@ export function FarcasterCheck({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If not in Farcaster, show the message
-  if (isInFarcaster === false) {
+  // If not in Farcaster, show the message (skip in development)
+  if (isInFarcaster === false && !isDevelopment) {
     const warpcastComposeUrl = `https://farcaster.xyz/?launchFrameUrl=https%3A%2F%2Fwww.minihunt.xyz%2F`;
     
     const handleOpenInWarpcast = () => {

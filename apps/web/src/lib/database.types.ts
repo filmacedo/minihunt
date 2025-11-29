@@ -176,6 +176,51 @@ export interface Database {
         };
         Relationships: [];
       };
+      week_claims: {
+        Row: {
+          id: string;
+          created_at: string;
+          fid: string;
+          week_id: string;
+          week_index: string;
+          transaction_hash: string;
+          claimed_amount: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          fid: string;
+          week_id: string;
+          week_index: string;
+          transaction_hash: string;
+          claimed_amount: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          fid?: string;
+          week_id?: string;
+          week_index?: string;
+          transaction_hash?: string;
+          claimed_amount?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "week_claims_fid_fkey";
+            columns: ["fid"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+            isOneToOne: false;
+          },
+          {
+            foreignKeyName: "week_claims_week_id_fkey";
+            columns: ["week_id"];
+            referencedRelation: "weeks";
+            referencedColumns: ["id"];
+            isOneToOne: false;
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

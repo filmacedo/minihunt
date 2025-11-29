@@ -150,42 +150,38 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
       post("/api/miniapps/vote", {
         tx_hash: voteHash,
         fid: context.user.fid
-      }).then(async () => {
+      }).then(() => {
         // Show success message
         setIsSuccess(true);
-        
-        // Prompt user to cast after successful API call
-        try {
-          const appUrl = env.NEXT_PUBLIC_URL;
-          const appName = app?.name || "this MiniApp";
-          const text = `I just bet on ${appName} on MiniHunt! 🎯\n\nCheck it out: ${appUrl}`;
-          
-          // Include app image URL if available, otherwise just the app URL
-          const imageUrl = app?.imageUrl || app?.iconUrl;
-          const embeds = imageUrl 
-            ? [appUrl, imageUrl] as [string, string]
-            : [appUrl] as [string];
-          
-          await sdk.actions.composeCast({ text, embeds });
-        } catch (err) {
-          console.error("Failed to prompt cast", err);
-          // Don't block success callback if cast fails
-        }
-        
-        // Auto-close after 3 seconds
-        setTimeout(() => {
-          onSuccess();
-        }, 3000);
       }).catch((err) => {
         console.error("Vote indexing failed", err);
         // Don't block success callback if API submission fails
         setIsSuccess(true);
-        setTimeout(() => {
-          onSuccess();
-        }, 3000);
       });
     }
-  }, [isVoteSuccess, receipt, voteHash, context, post, onSuccess, app]);
+  }, [isVoteSuccess, receipt, voteHash, context, post]);
+
+  // Handle cast button click
+  const handleCast = async () => {
+    try {
+      const appUrl = env.NEXT_PUBLIC_URL;
+      const appName = app?.name || "this MiniApp";
+      const text = `I just bet on ${appName} on MiniHunt! 🎯\n\nCheck it out: ${appUrl}`;
+      
+      // Include app image URL if available, otherwise just the app URL
+      const imageUrl = app?.imageUrl || app?.iconUrl;
+      const embeds = imageUrl 
+        ? [appUrl, imageUrl] as [string, string]
+        : [appUrl] as [string];
+      
+      await sdk.actions.composeCast({ text, embeds });
+      onSuccess();
+    } catch (err) {
+      console.error("Failed to prompt cast", err);
+      // Still close on error
+      onSuccess();
+    }
+  };
 
   // Update error state from transaction errors
   useEffect(() => {
@@ -210,12 +206,21 @@ export function BettingModal({ app, onClose, onSuccess, isOpen }: BettingModalPr
           <p className="text-sm text-muted-foreground mb-6">
             Your vote has been recorded and the transaction has been confirmed.
           </p>
-          <Button
-            className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono"
-            onClick={onClose}
-          >
-            Close
-          </Button>
+          <div className="w-full space-y-3">
+            <Button
+              className="w-full h-12 text-lg bg-[#E1FF00] hover:bg-[#E1FF00]/90 text-black font-semibold font-mono"
+              onClick={handleCast}
+            >
+              Cast
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full h-12 text-lg text-muted-foreground hover:text-foreground"
+              onClick={onSuccess}
+            >
+              Close
+            </Button>
+          </div>
         </div>
       </ModalWrapper>
     );

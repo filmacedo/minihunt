@@ -5,7 +5,7 @@ import type { Abi } from "viem";
 import { env } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
-import { findOrCreateWeekByTimestamp, type WeekRecord } from "@/lib/repositories/weeks";
+import { findOrCreateWeekByTimestamp, type WeekRecord, getContractWeekMetadata } from "@/lib/repositories/weeks";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -181,8 +181,64 @@ export async function GET(request: Request) {
       }
     }
 
+    // Get contract metadata for week index calculation
+    const { startTime, weekSeconds } = await getContractWeekMetadata();
+
+    // Helper function to calculate week index
+    const calculateWeekIndex = (startTimeISO: string): bigint => {
+      const timestampSeconds = BigInt(Math.floor(new Date(startTimeISO).getTime() / 1000));
+      if (timestampSeconds < startTime) return 0n;
+      const offset = timestampSeconds - startTime;
+      return offset / weekSeconds;
+    };
+
+    // Get finalized status for all weeks in parallel
+    const weekIndices = weeks.map((week) => calculateWeekIndex(week.start_time));
+    const finalizedStatuses = await Promise.all(
+      weekIndices.map(async (weekIndex) => {
+        try {
+          return await publicClient.readContract({
+            abi: WEEKLY_BETS_ABI,
+            address: contractAddress,
+            functionName: "isWeekFinalized",
+            args: [weekIndex],
+          }) as boolean;
+        } catch {
+          return false;
+        }
+      })
+    );
+
+    // Check for claims in database
+    const { data: claims, error: claimsError } = await client
+      .from("week_claims")
+      .select("week_id, claimed_amount, created_at")
+      .eq("fid", fidString)
+      .in("week_id", weekIds);
+
+    if (claimsError) {
+      console.error("Failed to fetch claims:", claimsError);
+      // Continue without claims data rather than failing
+    }
+
+    // Create map of claims by week ID
+    const claimsByWeekId = new Map<
+      string,
+      { amount: string; claimedAt: string }
+    >();
+    if (claims) {
+      for (const claim of claims) {
+        if (!claim.week_id) continue;
+        const weekId = claim.week_id.toString();
+        claimsByWeekId.set(weekId, {
+          amount: claim.claimed_amount || "0",
+          claimedAt: claim.created_at,
+        });
+      }
+    }
+
     // Build response with week stats
-    const weekStats = weeks.map((week) => {
+    const weekStats = weeks.map((week, index) => {
       const weekId = week.id.toString();
       const spentFromVotes = votesByWeekId.get(weekId) || 0n;
       const earnings = earningsByWeekId.get(weekId);
@@ -191,13 +247,33 @@ export async function GET(request: Request) {
       const totalSpent = earnings?.paidAmount || spentFromVotes;
       const totalEarned = earnings?.earningAmount || 0n;
 
+      const weekIndex = weekIndices[index];
+      const isFinalized = finalizedStatuses[index];
+      const claimInfo = claimsByWeekId.get(weekId);
+      const isClaimed = !!claimInfo;
+
+      // Calculate 90-day deadline: week.endTime + 90 days
+      const endTime = new Date(week.end_time);
+      const deadline = new Date(endTime.getTime() + 90 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const isWithinDeadline = now < deadline;
+      const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
       return {
-        weekId: week.id,
+        weekId: week.id.toString(),
+        weekIndex: weekIndex.toString(),
         startTime: week.start_time,
         endTime: week.end_time,
         isCurrentWeek: week.id === currentWeek.id,
         spent: totalSpent.toString(),
         earned: totalEarned.toString(),
+        isFinalized,
+        isClaimed,
+        claimedAmount: claimInfo?.amount || null,
+        claimedAt: claimInfo?.claimedAt || null,
+        deadline: deadline.toISOString(),
+        isWithinDeadline,
+        daysUntilDeadline: isWithinDeadline ? daysUntilDeadline : null,
       };
     });
 
