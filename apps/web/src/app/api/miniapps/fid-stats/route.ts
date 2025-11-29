@@ -177,16 +177,34 @@ export async function GET(request: Request) {
       })
     );
 
-    // Check for claims in database
-    const { data: claims, error: claimsError } = await client
+    // Check for claims in database - fetch ALL claims for this fid first, then filter
+    // This ensures we don't miss any claims due to week_id type mismatches
+    const { data: allClaimsForFid, error: allClaimsError } = await client
       .from("week_claims")
       .select("week_id, claimed_amount, created_at")
-      .eq("fid", fidString)
-      .in("week_id", weekIds);
+      .eq("fid", fidString);
 
-    if (claimsError) {
-      console.error("Failed to fetch claims:", claimsError);
+    if (allClaimsError) {
+      console.error("Failed to fetch all claims:", allClaimsError);
       // Continue without claims data rather than failing
+    }
+
+    // Filter claims to only those matching our weeks
+    // Convert both to strings for comparison to avoid type mismatches
+    const weekIdSet = new Set(weekIds.map(id => id.toString()));
+    const claims = allClaimsForFid?.filter(claim => 
+      claim.week_id && weekIdSet.has(claim.week_id.toString())
+    ) || [];
+
+    // Debug logging for claims
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[fid-stats API] FID: ${fidString}, weekIds: ${JSON.stringify(weekIds.map(id => id.toString()))}, allClaimsForFid: ${allClaimsForFid?.length || 0}, filtered claims: ${claims.length}`);
+      if (allClaimsForFid && allClaimsForFid.length > 0) {
+        console.log(`[fid-stats API] All claims for FID:`, allClaimsForFid.map(c => ({ week_id: c.week_id?.toString(), amount: c.claimed_amount })));
+      }
+      if (claims.length > 0) {
+        console.log(`[fid-stats API] Filtered claims:`, claims.map(c => ({ week_id: c.week_id?.toString(), amount: c.claimed_amount })));
+      }
     }
 
     // Create map of claims by week ID
@@ -205,6 +223,11 @@ export async function GET(request: Request) {
       }
     }
 
+    // Debug logging for claims mapping
+    if (process.env.NODE_ENV === 'development' && claimsByWeekId.size > 0) {
+      console.log(`[fid-stats API] Claims mapped by weekId:`, Array.from(claimsByWeekId.entries()));
+    }
+
     // Build response with week stats
     const weekStats = weeks.map((week, index) => {
       const weekId = week.id.toString();
@@ -219,6 +242,13 @@ export async function GET(request: Request) {
       const isFinalized = finalizedStatuses[index];
       const claimInfo = claimsByWeekId.get(weekId);
       const isClaimed = !!claimInfo;
+
+      // Debug logging for claim status
+      if (process.env.NODE_ENV === 'development') {
+        if (earned > 0n) {
+          console.log(`[fid-stats API] Week ${weekId} (index ${weekIndex}): earned=${earned}, isClaimed=${isClaimed}, claimInfo=${claimInfo ? JSON.stringify(claimInfo) : 'null'}`);
+        }
+      }
 
       // Calculate 90-day deadline: week.endTime + 90 days
       const endTime = new Date(week.end_time);
