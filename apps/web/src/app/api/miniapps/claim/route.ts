@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import MINI_APP_WEEKLY_BETS_ABI from "@/lib/abis/mini-app-weekly-bets.json";
 import { findOrCreateWeekByTimestamp, getContractWeekMetadata } from "@/lib/repositories/weeks";
 import { ensureUserExists } from "@/lib/repositories/users";
+import type { Database } from "@/lib/database.types";
 
 const WEEKLY_BETS_ABI = MINI_APP_WEEKLY_BETS_ABI as Abi;
 
@@ -140,12 +141,13 @@ export async function POST(request: Request) {
     const week = await findOrCreateWeekByTimestamp(weekStartISO);
 
     // Check if claim already exists in fid_week_earnings
+    type EarningsRow = Database["public"]["Tables"]["fid_week_earnings"]["Row"];
     const { data: existingEarning, error: earningCheckError } = await client
       .from("fid_week_earnings")
       .select("*")
       .eq("fid", fid.toString())
       .eq("week_id", week.id)
-      .maybeSingle();
+      .maybeSingle() as { data: EarningsRow | null; error: any };
 
     if (earningCheckError) {
       console.error("Failed to check existing earnings:", earningCheckError);
