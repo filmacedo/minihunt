@@ -97,10 +97,10 @@ export async function GET(request: Request) {
       throw new Error(`Failed to fetch votes: ${votesError.message}`);
     }
 
-    // Get all earnings for this fid across all weeks
+    // Get all earnings for this fid across all weeks (including claim info)
     const { data: allEarnings, error: earningsError } = await client
       .from("fid_week_earnings")
-      .select("week_id, paid_amount, earning_amount")
+      .select("week_id, paid_amount, earning_amount, claim_tx, claimed_at")
       .eq("fid", fidString)
       .in("week_id", weekIds);
 
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
     const earningsByWeekId = new Map<
       string,
-      { paidAmount: bigint; earningAmount: bigint }
+      { paidAmount: bigint; earningAmount: bigint; claimTx: string | null; claimedAt: string | null }
     >();
     if (allEarnings) {
       for (const earning of allEarnings) {
@@ -129,6 +129,8 @@ export async function GET(request: Request) {
         earningsByWeekId.set(weekId, {
           paidAmount: earning.paid_amount ? BigInt(earning.paid_amount) : 0n,
           earningAmount: earning.earning_amount ? BigInt(earning.earning_amount) : 0n,
+          claimTx: earning.claim_tx || null,
+          claimedAt: earning.claimed_at || null,
         });
       }
     }
@@ -177,56 +179,8 @@ export async function GET(request: Request) {
       })
     );
 
-    // Check for claims in database - fetch ALL claims for this fid first, then filter
-    // This ensures we don't miss any claims due to week_id type mismatches
-    const { data: allClaimsForFid, error: allClaimsError } = await client
-      .from("week_claims")
-      .select("week_id, claimed_amount, created_at")
-      .eq("fid", fidString);
-
-    if (allClaimsError) {
-      console.error("Failed to fetch all claims:", allClaimsError);
-      // Continue without claims data rather than failing
-    }
-
-    // Filter claims to only those matching our weeks
-    // Convert both to strings for comparison to avoid type mismatches
-    const weekIdSet = new Set(weekIds.map(id => id.toString()));
-    const claims = allClaimsForFid?.filter(claim => 
-      claim.week_id && weekIdSet.has(claim.week_id.toString())
-    ) || [];
-
-    // Debug logging for claims
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[fid-stats API] FID: ${fidString}, weekIds: ${JSON.stringify(weekIds.map(id => id.toString()))}, allClaimsForFid: ${allClaimsForFid?.length || 0}, filtered claims: ${claims.length}`);
-      if (allClaimsForFid && allClaimsForFid.length > 0) {
-        console.log(`[fid-stats API] All claims for FID:`, allClaimsForFid.map(c => ({ week_id: c.week_id?.toString(), amount: c.claimed_amount })));
-      }
-      if (claims.length > 0) {
-        console.log(`[fid-stats API] Filtered claims:`, claims.map(c => ({ week_id: c.week_id?.toString(), amount: c.claimed_amount })));
-      }
-    }
-
-    // Create map of claims by week ID
-    const claimsByWeekId = new Map<
-      string,
-      { amount: string; claimedAt: string }
-    >();
-    if (claims) {
-      for (const claim of claims) {
-        if (!claim.week_id) continue;
-        const weekId = claim.week_id.toString();
-        claimsByWeekId.set(weekId, {
-          amount: claim.claimed_amount || "0",
-          claimedAt: claim.created_at,
-        });
-      }
-    }
-
-    // Debug logging for claims mapping
-    if (process.env.NODE_ENV === 'development' && claimsByWeekId.size > 0) {
-      console.log(`[fid-stats API] Claims mapped by weekId:`, Array.from(claimsByWeekId.entries()));
-    }
+    // Claims are now tracked in fid_week_earnings table via claim_tx and claimed_at fields
+    // No need to query week_claims table anymore
 
     // Build response with week stats
     const weekStats = weeks.map((week, index) => {
@@ -240,8 +194,13 @@ export async function GET(request: Request) {
 
       const weekIndex = weekIndices[index];
       const isFinalized = finalizedStatuses[index];
-      const claimInfo = claimsByWeekId.get(weekId);
-      const isClaimed = !!claimInfo;
+      // Check claim status from fid_week_earnings
+      const earning = earningsByWeekId.get(weekId);
+      const isClaimed = !!(earning?.claimTx);
+      const claimInfo = earning?.claimTx ? {
+        amount: earning.earningAmount.toString(),
+        claimedAt: earning.claimedAt || null,
+      } : null;
 
       // Debug logging for claim status
       if (process.env.NODE_ENV === 'development') {

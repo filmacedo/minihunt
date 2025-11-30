@@ -8,6 +8,8 @@ CREATE TABLE public.fid_week_earnings (
   week_id bigint,
   paid_amount numeric DEFAULT '0'::numeric,
   earning_amount numeric DEFAULT '0'::numeric,
+  claim_tx text,
+  claimed_at timestamp with time zone,
   CONSTRAINT fid_week_earnings_pkey PRIMARY KEY (id),
   CONSTRAINT fid_week_earnings_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id),
   CONSTRAINT fid_week_earnings_fid_fkey FOREIGN KEY (fid) REFERENCES public.users(id)
@@ -54,17 +56,4 @@ CREATE TABLE public.weeks (
   prize_pool numeric DEFAULT '0'::numeric,
   end_time timestamp without time zone NOT NULL UNIQUE,
   CONSTRAINT weeks_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.week_claims (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  fid bigint NOT NULL,
-  week_id bigint NOT NULL,
-  week_index numeric NOT NULL,
-  transaction_hash character varying NOT NULL,
-  claimed_amount numeric NOT NULL,
-  CONSTRAINT week_claims_pkey PRIMARY KEY (id),
-  CONSTRAINT week_claims_week_id_fkey FOREIGN KEY (week_id) REFERENCES public.weeks(id),
-  CONSTRAINT week_claims_fid_fkey FOREIGN KEY (fid) REFERENCES public.users(id),
-  CONSTRAINT week_claims_fid_week_id_unique UNIQUE (fid, week_id)
 );

@@ -17,6 +17,8 @@ export interface Database {
           id: string;
           paid_amount: string | null;
           week_id: string | null;
+          claim_tx: string | null;
+          claimed_at: string | null;
         };
         Insert: {
           created_at?: string;
@@ -25,6 +27,8 @@ export interface Database {
           id?: string;
           paid_amount?: string | null;
           week_id?: string | null;
+          claim_tx?: string | null;
+          claimed_at?: string | null;
         };
         Update: {
           created_at?: string;
@@ -33,6 +37,8 @@ export interface Database {
           id?: string;
           paid_amount?: string | null;
           week_id?: string | null;
+          claim_tx?: string | null;
+          claimed_at?: string | null;
         };
         Relationships: [
           {

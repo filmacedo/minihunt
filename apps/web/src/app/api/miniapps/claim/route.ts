@@ -55,7 +55,7 @@ const claimRequestSchema = z.object({
  * POST /api/miniapps/claim
  * Body: { tx_hash: string, fid: number }
  * 
- * Decodes transaction events, creates week_claims entry.
+ * Decodes transaction events, updates fid_week_earnings with claim_tx and claimed_at.
  */
 export async function POST(request: Request) {
   try {
@@ -139,52 +139,92 @@ export async function POST(request: Request) {
     // Find or create the week
     const week = await findOrCreateWeekByTimestamp(weekStartISO);
 
-    // Check if claim already exists
-    const { data: existingClaim } = await client
-      .from("week_claims")
+    // Check if claim already exists in fid_week_earnings
+    const { data: existingEarning, error: earningCheckError } = await client
+      .from("fid_week_earnings")
       .select("*")
       .eq("fid", fid.toString())
       .eq("week_id", week.id)
       .maybeSingle();
 
-    if (existingClaim) {
+    if (earningCheckError) {
+      console.error("Failed to check existing earnings:", earningCheckError);
       return NextResponse.json(
         {
-          success: true,
-          message: "Claim already recorded",
-          claim: existingClaim,
-        },
-        { status: 200 }
-      );
-    }
-
-    // Insert claim record
-    const { data: claim, error: claimError } = await client
-      .from("week_claims")
-      .insert({
-        fid: fid.toString(),
-        week_id: week.id,
-        week_index: weekIndex.toString(),
-        transaction_hash: txHash,
-        claimed_amount: amount.toString(),
-      })
-      .select()
-      .single();
-
-    if (claimError) {
-      console.error("Failed to insert claim:", claimError);
-      return NextResponse.json(
-        {
-          error: "Failed to record claim",
-          details: claimError.message,
+          error: "Failed to check existing earnings",
+          details: earningCheckError.message,
         },
         { status: 500 }
       );
     }
 
+    // If already claimed, return success
+    if (existingEarning?.claim_tx) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Claim already recorded",
+          claim: {
+            claim_tx: existingEarning.claim_tx,
+            claimed_at: existingEarning.claimed_at,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // If earnings record doesn't exist, create it first
+    if (!existingEarning) {
+      const { error: createError } = await client
+        .from("fid_week_earnings")
+        .insert({
+          fid: fid.toString(),
+          week_id: week.id,
+          paid_amount: "0",
+          earning_amount: amount.toString(),
+          claim_tx: txHash,
+          claimed_at: new Date().toISOString(),
+        });
+
+      if (createError) {
+        console.error("Failed to create earnings record:", createError);
+        return NextResponse.json(
+          {
+            error: "Failed to create earnings record",
+            details: createError.message,
+          },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Update existing earnings record with claim info
+      const { error: updateError } = await client
+        .from("fid_week_earnings")
+        .update({
+          claim_tx: txHash,
+          claimed_at: new Date().toISOString(),
+        })
+        .eq("fid", fid.toString())
+        .eq("week_id", week.id);
+
+      if (updateError) {
+        console.error("Failed to update earnings with claim:", updateError);
+        return NextResponse.json(
+          {
+            error: "Failed to update earnings with claim",
+            details: updateError.message,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      claim,
+      claim: {
+        claim_tx: txHash,
+        claimed_at: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.error("Failed to process claim:", error);
