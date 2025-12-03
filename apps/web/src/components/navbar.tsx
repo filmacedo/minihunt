@@ -85,11 +85,10 @@ export function TopNav({ onOpenModal }: TopNavProps) {
             {onOpenModal && (
               <>
                 <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    onOpenModal("submit");
-                  }}
-                  className="px-4 py-3 rounded-md text-sm font-semibold transition-colors hover:bg-muted/50 text-left"
+                  disabled
+                  onClick={() => {}}
+                  className="px-4 py-3 rounded-md text-sm font-semibold transition-colors text-left opacity-50 cursor-not-allowed"
+                  title="App submissions are temporarily disabled"
                 >
                   Submit MiniApp
                 </button>

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { TopNav } from "@/components/navbar";
 import { PrizeBanner } from "@/components/prize-banner";
 import { WelcomeBanner } from "@/components/welcome-banner";
+import { MaintenanceBanner } from "@/components/maintenance-banner";
 import { BettingModal } from "@/components/modals/betting-modal";
 import { SubmitAppModal } from "@/components/modals/submit-app-modal";
 import { HowItWorksModal } from "@/components/modals/how-it-works-modal";
@@ -123,6 +124,7 @@ export default function Home() {
   return (
     <main className="pb-20 relative min-h-screen">
       <TopNav onOpenModal={handleOpenModal} />
+      <MaintenanceBanner />
       <WelcomeBanner />
       <PrizeBanner 
         week={appsWeek} 
@@ -217,13 +219,15 @@ export default function Home() {
 
                   <div className="flex-none">
                     <button
-                      onClick={() => handleOpenModal("betting", entry.miniApp)}
+                      disabled
+                      onClick={() => {}}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-0.5 h-10 w-10 sm:h-12 sm:w-12 rounded-lg border-2 transition-all hover:scale-105 active:scale-95",
+                        "flex flex-col items-center justify-center gap-0.5 h-10 w-10 sm:h-12 sm:w-12 rounded-lg border-2 transition-all cursor-not-allowed opacity-50",
                         entry.totalVotes > 0
                           ? "border-foreground/10 bg-foreground/5 text-foreground dark:border-primary/50 dark:bg-primary/10 dark:text-primary"
-                          : "border-border bg-card text-muted-foreground hover:border-foreground/20"
+                          : "border-border bg-card text-muted-foreground"
                       )}
+                      title="Voting is temporarily disabled"
                     >
                       <Icons.ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       <span className="text-[10px] sm:text-xs font-semibold leading-none font-mono">
@@ -299,11 +303,13 @@ export default function Home() {
         )}
       </div>
 
-      {/* FAB */}
+      {/* FAB - Disabled */}
       {activeTab === "apps" && (
         <button
-          onClick={() => handleOpenModal("submit")}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-[#E1FF00] text-black rounded-full shadow-lg flex items-center justify-center hover:bg-[#E1FF00]/90 active:scale-95 transition-all z-30"
+          disabled
+          onClick={() => {}}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 bg-[#E1FF00]/50 text-black/50 rounded-full shadow-lg flex items-center justify-center cursor-not-allowed transition-all z-30"
+          title="App submissions are temporarily disabled"
         >
           <Icons.Plus className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
