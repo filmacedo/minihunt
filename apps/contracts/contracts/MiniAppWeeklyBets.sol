@@ -41,23 +41,24 @@ contract MiniAppWeeklyBets is Ownable {
     }
 
     // Flattened struct fields (cannot use struct in mapping due to Hardhat 3 limitation)
-    mapping(uint256 => uint256) internal weekPrizePool; // weekIdx => prize pool
-    mapping(uint256 => uint256) internal weekTotalPrizePool; // weekIdx => cumulative total prize pool ever stored for this week (never decreases)
-    mapping(uint256 => uint256) internal weekProtocolCollected; // weekIdx => protocol collected
-    mapping(uint256 => bool) internal weekFinalized; // weekIdx => finalized
-    mapping(uint256 => uint256) internal weekFirstVotes; // weekIdx => first place votes
-    mapping(uint256 => uint256) internal weekSecondVotes; // weekIdx => second place votes
-    mapping(uint256 => uint256) internal weekThirdVotes; // weekIdx => third place votes
+    mapping(uint256 => uint256) public weekPrizePool; // weekIdx => prize pool
+    mapping(uint256 => uint256) public weekTotalPrizePool; // weekIdx => cumulative total prize pool ever stored for this week (never decreases)
+    mapping(uint256 => uint256) public weekProtocolCollected; // weekIdx => protocol collected
+    mapping(uint256 => bool) public weekFinalized; // weekIdx => finalized
+    mapping(uint256 => uint256) public weekFirstVotes; // weekIdx => first place votes
+    mapping(uint256 => uint256) public weekSecondVotes; // weekIdx => second place votes
+    mapping(uint256 => uint256) public weekThirdVotes; // weekIdx => third place votes
     
     // Flattened mappings and arrays (cannot be in struct)
-    mapping(uint256 => bytes32[]) internal weekApps; // weekIdx => app hashes
-    mapping(uint256 => bytes32[]) internal weekFirstGroup; // weekIdx => first place apps
-    mapping(uint256 => bytes32[]) internal weekSecondGroup; // weekIdx => second place apps
-    mapping(uint256 => bytes32[]) internal weekThirdGroup; // weekIdx => third place apps
-    mapping(uint256 => mapping(bytes32 => AppWeekInfo)) internal weekAppInfo; // weekIdx => appHash => AppWeekInfo
-    mapping(uint256 => mapping(bytes32 => mapping(address => uint256))) internal weekVotesByUser; // weekIdx => appHash => user => votes
-    mapping(uint256 => mapping(address => uint256)) internal weekUserTotalVotes; // weekIdx => user => total votes
-    mapping(uint256 => mapping(address => bool)) internal weekClaimed; // weekIdx => user => claimed
+    mapping(uint256 => bytes32[]) public weekApps; // weekIdx => app hashes
+    mapping(uint256 => bytes32[]) public weekFirstGroup; // weekIdx => first place apps
+    mapping(uint256 => bytes32[]) public weekSecondGroup; // weekIdx => second place apps
+    mapping(uint256 => bytes32[]) public weekThirdGroup; // weekIdx => third place apps
+    mapping(uint256 => mapping(bytes32 => AppWeekInfo)) public weekAppInfo; // weekIdx => appHash => AppWeekInfo
+    mapping(uint256 => mapping(bytes32 => mapping(address => uint256))) public weekVotesByUser; // weekIdx => appHash => user => votes
+    mapping(uint256 => mapping(address => uint256)) public weekUserTotalVotes; // weekIdx => user => total votes
+    mapping(uint256 => mapping(address => bool)) public weekClaimed; // weekIdx => user => claimed
+    mapping(uint256 => mapping(address => uint256)) public weekClaimedAmount; // weekIdx => user => claimed amount
 
     /* ========== EVENTS ========== */
     event AppSubmitted(bytes32 indexed appHash, string fullUrl, address indexed submitter, uint256 week);
@@ -76,6 +77,7 @@ contract MiniAppWeeklyBets is Ownable {
     error NotEligibleToClaim();
     error NothingToSweep();
     error InvalidFinalizeTime();
+    error ClaimDeadlinePassed();
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
@@ -140,7 +142,12 @@ contract MiniAppWeeklyBets is Ownable {
         uint256 protocolFee = (cost * PROTOCOL_FEE_NUM) / PROTOCOL_FEE_DEN;
         uint256 poolShare = cost - protocolFee;
 
-        weekProtocolCollected[currentWeek] += protocolFee;
+        // Transfer protocol fee immediately to recipient
+        if (protocolFee > 0) {
+            (bool feeSuccess, ) = payable(protocolRecipient).call{value: protocolFee}("");
+            require(feeSuccess, "Protocol fee transfer failed");
+        }
+
         weekPrizePool[currentWeek] += poolShare;
         weekTotalPrizePool[currentWeek] += poolShare;
         totalPrizePools += poolShare;
@@ -267,6 +274,12 @@ contract MiniAppWeeklyBets is Ownable {
         if (weekUserTotalVotes[weekIdx][msg.sender] == 0) revert NotEligibleToClaim();
         if (weekClaimed[weekIdx][msg.sender]) revert AlreadyClaimed();
 
+        // Check if pool was swept (prevent claiming after sweep deadline if pool is empty)
+        uint256 weekEnd = startTime + (weekIdx + 1) * WEEK_SECONDS;
+        if (block.timestamp >= weekEnd + CLAIM_DEADLINE && weekPrizePool[weekIdx] == 0) {
+            revert ClaimDeadlinePassed();
+        }
+
         // compute payout for caller using stored winners and rules
         uint256 payout = _computePayoutForUser(weekIdx, msg.sender);
 
@@ -284,6 +297,9 @@ contract MiniAppWeeklyBets is Ownable {
             (bool success, ) = payable(msg.sender).call{value: payout}("");
             require(success, "Transfer failed");
         }
+
+        // store the actual claimed amount
+        weekClaimedAmount[weekIdx][msg.sender] = payout;
 
         emit Claimed(weekIdx, msg.sender, payout);
     }
@@ -557,19 +573,19 @@ contract MiniAppWeeklyBets is Ownable {
 
     /* ========== SWEEP UNCLAIMED ========== */
     /**
-     * @notice Sweep leftover prizePool + protocolCollected to protocol recipient after claim deadline.
+     * @notice Sweep leftover prizePool to protocol recipient after claim deadline.
+     * Protocol fees are transferred immediately on each vote, so only prize pool is swept.
      * Anyone can call after (weekEnd + CLAIM_DEADLINE)
      */
     function sweepUnclaimedToProtocol(uint256 weekIdx) external {
         uint256 weekEnd = startTime + (weekIdx + 1) * WEEK_SECONDS;
         require(block.timestamp >= weekEnd + CLAIM_DEADLINE, "deadline not reached");
 
-        uint256 amount = weekPrizePool[weekIdx] + weekProtocolCollected[weekIdx];
+        uint256 amount = weekPrizePool[weekIdx];
         if (amount == 0) revert NothingToSweep();
 
         // zero out
         weekPrizePool[weekIdx] = 0;
-        weekProtocolCollected[weekIdx] = 0;
 
         (bool success, ) = payable(protocolRecipient).call{value: amount}("");
         require(success, "Transfer failed");
@@ -660,6 +676,18 @@ contract MiniAppWeeklyBets is Ownable {
 
     function getWeekUserTotalVotes(uint256 weekIdx, address user) external view returns (uint256) {
         return weekUserTotalVotes[weekIdx][user];
+    }
+
+    /**
+     * @notice Check if a wallet has already claimed rewards for a specific week and get the claimed amount.
+     * @param weekIdx The week index to check
+     * @param user The address of the wallet to check
+     * @return claimed True if the wallet has already claimed for this week, false otherwise
+     * @return amount The amount that was claimed (0 if not claimed)
+     */
+    function hasClaimedForWeek(uint256 weekIdx, address user) external view returns (bool claimed, uint256 amount) {
+        claimed = weekClaimed[weekIdx][user];
+        amount = weekClaimedAmount[weekIdx][user];
     }
 
     /**

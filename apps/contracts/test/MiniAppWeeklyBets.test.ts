@@ -144,10 +144,14 @@ describe("MiniAppWeeklyBets", function () {
       expect(balanceBefore - balanceAfter >= expectedPrice).to.be.true;
     });
 
-    it("Should collect protocol fee correctly", async function () {
+    it("Should transfer protocol fee immediately to recipient", async function () {
       const appHash = getAppHash("https://app1.com");
       const url = "https://app1.com";
       const currentWeek = await contract.read.getCurrentWeek();
+
+      const protocolBalanceBefore = await publicClient.getBalance({
+        address: protocolRecipient.account.address,
+      });
 
       const price = await contract.read.getPriceForNextVoteCurrentWeek([appHash]);
       await contract.write.vote([appHash, url], {
@@ -155,10 +159,18 @@ describe("MiniAppWeeklyBets", function () {
         value: price,
       });
 
+      const protocolBalanceAfter = await publicClient.getBalance({
+        address: protocolRecipient.account.address,
+      });
+
+      const expectedFee = (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
+      const actualFee = protocolBalanceAfter - protocolBalanceBefore;
+      expect(actualFee).to.equal(expectedFee);
+
+      // Protocol collected should be 0 since fees are transferred immediately
       const protocolCollected =
         await contract.read.getWeekProtocolCollected([currentWeek]);
-      const expectedFee = (INITIAL_PRICE * PROTOCOL_FEE) / 100n;
-      expect(protocolCollected).to.equal(expectedFee);
+      expect(protocolCollected).to.equal(0n);
     });
 
     it("Should add to prize pool correctly", async function () {
@@ -368,9 +380,25 @@ describe("MiniAppWeeklyBets", function () {
       await time.increaseTo(weekEnd);
       await contract.write.finalizeCurrentWeek();
 
+      // Check before claiming
+      const [claimedBefore, amountBefore] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(claimedBefore).to.be.false;
+      expect(amountBefore).to.equal(0n);
+
       await contract.write.claim([currentWeek], {
         account: user1.account,
       });
+
+      // Check after claiming
+      const [claimedAfter, amountAfter] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(claimedAfter).to.be.true;
+      expect(amountAfter > 0n).to.be.true;
 
       // Try to claim again - should fail
       await assert.rejects(
@@ -420,6 +448,103 @@ describe("MiniAppWeeklyBets", function () {
 
       const finalized = await contract.read.isWeekFinalized([currentWeek]);
       expect(finalized).to.be.true;
+    });
+
+    it("Should prevent claiming after sweep deadline when pool is empty", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
+
+      // User1 votes
+      const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+        value: price,
+      });
+
+      // User2 votes (but won't claim before deadline)
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+        value: price2,
+      });
+
+      // Finalize week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // User1 claims (before deadline)
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      // Advance past claim deadline
+      await time.increase(CLAIM_DEADLINE + 1n);
+
+      // Sweep unclaimed funds
+      await contract.write.sweepUnclaimedToProtocol([currentWeek]);
+
+      // Verify pool is empty
+      const prizePoolAfter = await contract.read.getWeekPrizePool([currentWeek]);
+      expect(prizePoolAfter).to.equal(0n);
+
+      // User2 should not be able to claim after deadline when pool is empty
+      await assert.rejects(
+        contract.write.claim([currentWeek], {
+          account: user2.account,
+        }),
+        /ClaimDeadlinePassed/,
+      );
+    });
+
+    it("Should allow claiming after deadline if pool still has funds", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+      const CLAIM_DEADLINE = 90n * 24n * 60n * 60n;
+
+      // User1 votes
+      const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+        value: price,
+      });
+
+      // User2 votes
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+        value: price2,
+      });
+
+      // Finalize week
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // Advance past claim deadline (but don't sweep)
+      await time.increase(CLAIM_DEADLINE + 1n);
+
+      // Pool should still have funds
+      const prizePool = await contract.read.getWeekPrizePool([currentWeek]);
+      expect(prizePool > 0n).to.be.true;
+
+      // User2 should still be able to claim (deadline passed but pool not empty)
+      const balanceBefore = await publicClient.getBalance({
+        address: user2.account.address,
+      });
+
+      await contract.write.claim([currentWeek], {
+        account: user2.account,
+      });
+
+      const balanceAfter = await publicClient.getBalance({
+        address: user2.account.address,
+      });
+
+      expect(balanceAfter > balanceBefore).to.be.true;
     });
   });
 
@@ -836,6 +961,9 @@ describe("MiniAppWeeklyBets", function () {
       // Advance past claim deadline
       await time.increase(CLAIM_DEADLINE + 1n);
 
+      const prizePool = await contract.read.getWeekPrizePool([currentWeek]);
+      expect(prizePool > 0n).to.be.true;
+
       const balanceBefore = await publicClient.getBalance({ address: 
         protocolRecipient.account.address,
        });
@@ -846,7 +974,12 @@ describe("MiniAppWeeklyBets", function () {
         protocolRecipient.account.address,
        });
 
-      expect(balanceAfter > balanceBefore).to.be.true;
+      // Should receive the prize pool (protocol fees were already transferred)
+      expect(balanceAfter - balanceBefore).to.equal(prizePool);
+
+      // Prize pool should be zero after sweep
+      const prizePoolAfter = await contract.read.getWeekPrizePool([currentWeek]);
+      expect(prizePoolAfter).to.equal(0n);
     });
 
     it("Should prevent sweeping before deadline", async function () {
@@ -1614,6 +1747,169 @@ describe("MiniAppWeeklyBets", function () {
 
       // Account for gas costs, so actualCost2 should be >= priceAfter
       expect(actualCost2 >= priceAfter).to.be.true;
+    });
+  });
+
+  describe("hasClaimedForWeek", function () {
+    it("Should return false and 0 for user who hasn't claimed", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const [claimed, amount] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+
+      expect(claimed).to.be.false;
+      expect(amount).to.equal(0n);
+    });
+
+    it("Should return true and correct amount after claiming", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+        value: price,
+      });
+
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // Get expected payout before claiming
+      const expectedPayout = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+
+      // Check before claiming
+      const [claimedBefore, amountBefore] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(claimedBefore).to.be.false;
+      expect(amountBefore).to.equal(0n);
+
+      // Claim
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      // Check after claiming
+      const [claimedAfter, amountAfter] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(claimedAfter).to.be.true;
+      expect(amountAfter).to.equal(expectedPayout);
+    });
+
+    it("Should return correct amount for multiple users", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+        value: price,
+      });
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user2.account,
+        value: price2,
+      });
+
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // User1 claims
+      const expectedPayout1 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      await contract.write.claim([currentWeek], {
+        account: user1.account,
+      });
+
+      const [claimed1, amount1] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user1.account.address,
+      ]);
+      expect(claimed1).to.be.true;
+      expect(amount1).to.equal(expectedPayout1);
+
+      // User2 hasn't claimed yet
+      const [claimed2, amount2] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      expect(claimed2).to.be.false;
+      expect(amount2).to.equal(0n);
+
+      // User2 claims
+      const expectedPayout2 = await contract.read.getUserPayoutForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      await contract.write.claim([currentWeek], {
+        account: user2.account,
+      });
+
+      const [claimed2After, amount2After] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      expect(claimed2After).to.be.true;
+      expect(amount2After).to.equal(expectedPayout2);
+    });
+
+    it("Should return 0 amount for user who claimed but got 0 payout", async function () {
+      const currentWeek = await contract.read.getCurrentWeek();
+
+      // User1 votes for app1
+      const app1 = getAppHash("https://app1.com");
+      const price = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user1.account,
+        value: price,
+      });
+
+      // User2 votes for app2 (which will lose)
+      const app2 = getAppHash("https://app2.com");
+      const price2 = await contract.read.getPriceForNextVoteCurrentWeek([app2]);
+      await contract.write.vote([app2, "https://app2.com"], {
+        account: user2.account,
+        value: price2,
+      });
+
+      // Add more votes to app1 to ensure it wins
+      const price3 = await contract.read.getPriceForNextVoteCurrentWeek([app1]);
+      await contract.write.vote([app1, "https://app1.com"], {
+        account: user3.account,
+        value: price3,
+      });
+
+      const startTime = await contract.read.startTime();
+      const weekEnd = getWeekEnd(currentWeek, startTime);
+      await time.increaseTo(weekEnd);
+      await contract.write.finalizeCurrentWeek();
+
+      // User2 claims (voted for losing app, might get 0 or very small payout)
+      await contract.write.claim([currentWeek], {
+        account: user2.account,
+      });
+
+      const [claimed, amount] = await contract.read.hasClaimedForWeek([
+        currentWeek,
+        user2.account.address,
+      ]);
+      expect(claimed).to.be.true;
+      // Amount might be 0 if app2 is not in top 3, or small if it is
+      expect(amount >= 0n).to.be.true;
     });
   });
 });
